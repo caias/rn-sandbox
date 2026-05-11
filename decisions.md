@@ -8,8 +8,10 @@
 
 | # | 항목 | 결정 | 근거 / 비고 |
 |---|---|---|---|
-| D-1 | RN 버전 | **0.74.5** (임시) | sandbox-poc-mvp-todo.md 41행 가정값. 본작업 전 재확인 — iOS Swift 6 strict concurrency, Android compileSdk 36과 호환 검토 |
-| D-2 | Hermes | **ON** | RN 0.71+ 기본값. Android compileSdk 36 + minSdk 28 환경에서 표준. iOS Swift 6 호환 검토 보류 |
+| D-1 | RN 버전 | **0.83.2** (2026-05-11 업그레이드) | life 모노레포(admin/web)의 React 19 통일에 맞춰 React 19.2.1 사용. 0.83 시리즈가 19.2.x peer (`^19.2.0`)를 정확히 충족. Toss Granite 카탈로그(RN 0.84 + React 19.2.3)와도 1 minor 차이로 정렬 |
+| D-1a | React 버전 | **19.2.1** | life 모노레포 통일 버전. RN 0.83 peer `^19.2.0` 만족. 향후 모노레포가 19.2.x 어디로 가도 함께 움직임 |
+| D-1b | Architecture | **New Architecture (Bridgeless) only** | RN 0.82+는 Old Architecture 제거. `ReactHost` + `ReactSurface` 단일 모델 |
+| D-2 | Hermes | **ON** | RN 0.71+ 기본값. RN 0.83 + Android compileSdk 36 / minSdk 24 환경에서 검증됨 |
 | D-3 | URI 스킴 | **`lifeplus-sandbox`** | 기존 iOS/Android의 `lifeplus-tribes`와 분리. 본 레포 통합 단계에서 재논의 |
 | D-4 | iOS Deployment Target | **iOS 15.0** | RN 0.74 안전선. 본 레포(`LifePlusTribesApp`) Tuist 추출값과 비교 필요 |
 | D-5 | Android minSdk | **24** | RN 0.74 권장. 본 레포 28과 다르지만 sandbox-poc는 보수적 최소값 |
@@ -59,6 +61,22 @@
 - **D-2 (Hermes)**: ON 확정. gradle.properties `hermesEnabled=true` 기본값으로 빌드 통과
 - **D-7 (Android UI)**: View System + `FrameLayout` 컨테이너 + AppCompatActivity → 의도대로 동작
 - **D-12 (Metro 미사용)**: `getJSBundleFile() = "assets://main.jsbundle"` + `getUseDeveloperSupport = false`로 확정. APK에 정적 번들 포함 확인
+
+### RN 0.83 업그레이드 회고 (2026-05-11)
+
+1. **incremental upgrade(0.74→0.78→0.80→...)를 시도하지 않고 fresh init이 정답이었다**
+   - 0.74 → 0.83 점프는 ReactNativeHost 제거 / autolinking 변경 / SoLoader 변경 / Hermes 통합 변경 등 깨지는 곳이 너무 많음
+   - HelloRN을 RN CLI로 새로 init한 후 sandbox 코드를 그 위에 다시 입히는 패턴이 가장 안전
+
+2. **자체 Fragment + ReactSurfaceView 구현은 함정**
+   - 처음 RN 0.83에서 `host.createSurface().start()` → `surface.view`를 Fragment에 add했을 때 화면이 흰 채로 안 그려졌음. ReactHost lifecycle (`onHostResume/Pause/Destroy`) 연결 누락으로 Fabric renderer가 surface 측정/렌더링을 시작 안 함
+   - **정답은 RN 공식 `com.facebook.react.ReactFragment` 사용.** `ReactFragment.Builder().setComponentName(...).setLaunchOptions(...).setFabricEnabled(true).build()` 한 줄로 ReactSurface 생성/attach/lifecycle 모두 RN이 처리
+   - 단 호스트 Activity가 **`DefaultHardwareBackBtnHandler`를 구현해야 함** — onResume에서 ClassCastException 발생
+
+3. **Toss Granite로부터 흡수한 것 (Granite 자체는 도입하지 않음)**
+   - RN 0.84 + React 19.2.3 catalog (우리의 RN 0.83.2 + React 19.2.1 결정의 reality-check)
+   - brownfield 시나리오는 RN 공식 `ReactFragment`만 잘 쓰면 충분 — 별도 helper 불필요
+   - 참고: [callstack/react-native-brownfield](https://github.com/callstack/react-native-brownfield)도 RN 0.76+ Fast Refresh 호환 helper. 필요해지면 도입 검토
 
 ### 다음 스프린트 보강 항목
 

@@ -6,8 +6,16 @@ import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.commit
+import com.facebook.react.ReactFragment
+import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
+
+    // JS 측 BackHandler.exitApp() 호출 시 invoke. 표준 백 버튼 동작에 위임.
+    override fun invokeDefaultOnBackPressed() {
+        onBackPressedDispatcher.onBackPressed()
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,7 +45,7 @@ class MainActivity : AppCompatActivity() {
             params[name] = uri.getQueryParameter(name).orEmpty()
         }
         Log.i(TAG, "open url=$uri appName=$appName path=$path params=$params")
-        showRNContainer(appName, path, params)
+        showRN(appName, path, params)
     }
 
     private fun showDevTool() {
@@ -46,8 +54,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showRNContainer(appName: String, path: String, params: HashMap<String, String>) {
-        val fragment = RNContainerFragment.newInstance(appName, path, params)
+    private fun showRN(appName: String, path: String, params: HashMap<String, String>) {
+        // RN 0.83+ New Architecture: 공식 ReactFragment 사용.
+        // ReactSurface 생성/attach/start, ReactHost lifecycle 모두 RN이 알아서 처리.
+        val initialProps = Bundle().apply {
+            putString("initialPath", path)
+            putString("platform", "android")
+        }
+        val fragment = ReactFragment.Builder()
+            .setComponentName(appName)
+            .setLaunchOptions(initialProps)
+            .setFabricEnabled(true)
+            .build()
         supportFragmentManager.commit {
             replace(R.id.container, fragment)
             addToBackStack(appName)

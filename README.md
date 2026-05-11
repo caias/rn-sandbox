@@ -116,18 +116,32 @@ DEBUG 빌드에서만 노출.
 
 ---
 
+## RN / React 버전
+
+- **React Native 0.83.2** (New Architecture only, Bridgeless)
+- **React 19.2.1** (life 모노레포 React 19 통일에 맞춤)
+- Hermes ON · Fabric ON
+
+이전 (Phase 1 초기) RN 0.74.5 + React 18.x → 2026-05-11 업그레이드. 자세한 회고는 [decisions.md](decisions.md).
+
 ## 정적 번들 재생성
 
-번들은 이미 커밋되어 있다. 재생성이 필요한 경우:
+번들은 이미 커밋되어 있다. RN 코드(`HelloRN/App.tsx`)를 바꾼 후 재생성이 필요한 경우:
 
 ```bash
-npx @react-native-community/cli init HelloRN --version 0.74.5
 cd HelloRN
-npx react-native bundle --platform ios --dev false \
-  --entry-file index.js --bundle-output main.jsbundle --assets-dest ios-assets
 npx react-native bundle --platform android --dev false \
-  --entry-file index.js --bundle-output main.jsbundle --assets-dest android-assets
-# 결과물을 sandbox-poc의 ios/SandboxApp/RN/, android/app/src/main/assets/ 로 복사
+  --entry-file index.js \
+  --bundle-output ../android/app/src/main/assets/main.jsbundle \
+  --assets-dest ../android/app/src/main/res
+```
+
+HelloRN scratch가 통째로 사라졌다면 재초기화:
+
+```bash
+npx @react-native-community/cli init HelloRN --version 0.83.2 --skip-install --skip-git-init
+cd HelloRN && npm pkg set dependencies.react="19.2.1" && npm install
+# App.tsx를 본 레포의 ship-state 텍스트로 교체 후 위 bundle 명령 실행
 ```
 
 ---

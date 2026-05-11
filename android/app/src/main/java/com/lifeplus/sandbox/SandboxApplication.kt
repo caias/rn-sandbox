@@ -6,12 +6,8 @@ import android.util.Log
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
-import com.facebook.react.ReactNativeHost
-import com.facebook.react.ReactPackage
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
+import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import com.facebook.react.defaults.DefaultReactNativeHost
-import com.facebook.soloader.SoLoader
 
 class SandboxApplication : Application(), ReactApplication {
 
@@ -24,33 +20,23 @@ class SandboxApplication : Application(), ReactApplication {
 
     private val useMetro: Boolean get() = metroIp.isNotEmpty()
 
-    override val reactNativeHost: ReactNativeHost =
-        object : DefaultReactNativeHost(this) {
-            override fun getPackages(): List<ReactPackage> =
-                PackageList(this).packages
-
-            override fun getJSMainModuleName(): String = "index"
-
-            // Metro 모드: dev 지원 ON (hot reload, devmenu, redbox)
-            override fun getUseDeveloperSupport(): Boolean = useMetro
-
-            // Metro 모드: null 반환 → ReactInstanceManager가 getJSMainModuleName + dev server로 fetch
-            // 정적 모드: assets://main.jsbundle
-            override fun getJSBundleFile(): String? =
-                if (useMetro) null else "assets://main.jsbundle"
-
-            override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
-            override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
-        }
-
-    override val reactHost: ReactHost
-        get() = getDefaultReactHost(applicationContext, reactNativeHost)
+    // RN 0.83+: ReactHost (single model, New Architecture)
+    // - Metro 모드: jsBundleFilePath=null → Metro에서 fetch, useDevSupport=true
+    // - 정적 모드: assets://main.jsbundle, useDevSupport=false
+    override val reactHost: ReactHost by lazy {
+        getDefaultReactHost(
+            context = applicationContext,
+            packageList = PackageList(this).packages,
+            jsMainModulePath = "index",
+            jsBundleFilePath = if (useMetro) null else "assets://main.jsbundle",
+            useDevSupport = useMetro,
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()
-        SoLoader.init(this, false)
 
-        // Metro 모드: RN의 DevInternalSettings가 보는 debug_http_host에 사용자가 입력한 IP를 주입
+        // Metro 모드: RN의 DevInternalSettings가 보는 debug_http_host에 사용자 IP를 주입
         if (useMetro) {
             getSharedPreferences("react-native-dev-preferences", Context.MODE_PRIVATE)
                 .edit()
@@ -62,8 +48,7 @@ class SandboxApplication : Application(), ReactApplication {
             "sandbox-poc",
             if (useMetro) "RN mode: Metro http://$metroIp/" else "RN mode: static assets://main.jsbundle"
         )
-        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-            load()
-        }
+
+        loadReactNative(this)
     }
 }

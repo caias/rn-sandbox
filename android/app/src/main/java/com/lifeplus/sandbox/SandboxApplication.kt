@@ -20,15 +20,22 @@ class SandboxApplication : Application(), ReactApplication {
 
     private val useMetro: Boolean get() = metroIp.isNotEmpty()
 
+    // MainActivity 가 Metro 모드(단일 번들) vs 정적 모드(멀티 번들) 분기에 사용.
+    val isMetroMode: Boolean get() = useMetro
+
     // RN 0.83+: ReactHost (single model, New Architecture)
-    // - Metro 모드: jsBundleFilePath=null → Metro에서 fetch, useDevSupport=true
-    // - 정적 모드: assets://main.jsbundle, useDevSupport=false
+    // - Metro 모드: jsBundleFilePath=null → Metro에서 fetch (단일 번들), useDevSupport=true
+    // - 정적 모드 (멀티 번들):
+    //     1. 부팅 시 shared.bundle.js 한 번 평가 → globalThis.__SHARED__ 채워짐
+    //     2. URI 진입 시 MainActivity 가 pages/{appName}.bundle.js 동적 평가
+    //     → AppRegistry.registerComponent('{appName}', ...) 호출됨
+    //     → ReactFragment 가 그 appName 으로 surface mount
     override val reactHost: ReactHost by lazy {
         getDefaultReactHost(
             context = applicationContext,
             packageList = PackageList(this).packages,
             jsMainModulePath = "index",
-            jsBundleFilePath = if (useMetro) null else "assets://main.jsbundle",
+            jsBundleFilePath = if (useMetro) null else "assets://shared.bundle.js",
             useDevSupport = useMetro,
         )
     }
@@ -46,7 +53,7 @@ class SandboxApplication : Application(), ReactApplication {
 
         Log.i(
             "sandbox-poc",
-            if (useMetro) "RN mode: Metro http://$metroIp/" else "RN mode: static assets://main.jsbundle"
+            if (useMetro) "RN mode: Metro http://$metroIp/" else "RN mode: static multi-bundle (shared + pages/*)"
         )
 
         loadReactNative(this)

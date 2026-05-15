@@ -16,15 +16,8 @@ yarn-error.log*
 # Node
 node_modules/
 .npm
-
-# 루트의 HelloRN/* → symlink (gradle 경로 해소용, 트래킹 X)
-/node_modules
-/package.json
 .eslintcache
 *.tgz
-
-# RN bundle generation (HelloRN scratch project)
-HelloRN/
 
 # === iOS ===
 ios/Pods/
@@ -35,6 +28,7 @@ ios/**/*.xcuserstate
 ios/**/xcuserdata/
 ios/*.hmap
 ios/Podfile.lock.bak
+ios/.xcode.env.local
 
 # Xcode
 xcuserdata/

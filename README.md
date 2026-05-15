@@ -52,32 +52,59 @@
 
 ## 진행 상태
 
-### MVP (2026-05-11 완료)
+### MVP (2026-05-11 완료, iOS 는 2026-05-15 verify 완료)
 
 | DoD | Android | iOS |
 |---|---|---|
-| DoD-1 빌드 성공 | ✅ | ⏸ ios-wip/ |
-| DoD-2 DevTool UI 스킴 입력 | ✅ | ⏸ |
-| DoD-3 스킴 파싱 로그 | ✅ | ⏸ |
-| DoD-4 정적 번들로 RN 부팅 | ✅ | ⏸ |
+| DoD-1 빌드 성공 | ✅ | ✅ Xcode 26.5 / macOS 26.3 / iOS 26.5 SDK |
+| DoD-2 DevTool UI 스킴 입력 | ✅ | ✅ DevToolViewController |
+| DoD-3 스킴 파싱 로그 | ✅ | ✅ AppDelegate.handle |
+| DoD-4 정적 번들로 RN 부팅 | ✅ | ✅ shared.bundle.js + pages/*.bundle.js |
 
 ### Phase 1 — Multi-bundle host shell (2026-05-13 완료, Android)
 
 | 항목 | 상태 | 비고 |
 |---|---|---|
-| InitialProps query params 평탄화 | ✅ | `MainActivity.handleIntent` 가 `uri.queryParameterNames` 를 모두 `putString`. RESERVED_KEYS 가드. |
-| Multi-bundle 평가 | ✅ | `MainActivity.loadPageBundle` 가 `JSBundleLoader.createAssetLoader` + `ReactHostImpl.loadBundle` (reflection) |
+| InitialProps query params 평탄화 | ✅ | `MainActivity.handleIntent` 가 `uri.queryParameterNames` 를 모두 `putString`. RESERVED_KEYS 가드. iOS 도 `RNContainerViewController.buildInitialProps` 가 동일 형태 |
+| Multi-bundle 평가 (Android) | ✅ | `MainActivity.loadPageBundle` 가 `JSBundleLoader.createAssetLoader` + `ReactHostImpl.loadBundle` (reflection) |
 | ReactInstance ready 대기 | ✅ | `addReactInstanceEventListener` + `currentReactContext` 가드 |
-| URI 스킴 통일 | ✅ | `lifeplus-sandbox` → `lifeplus-tribes` (모노레포 공통) |
-| iOS multi-bundle | ⏸ | ios-wip/ 마무리 + multi-bundle 적용 별도 작업 |
+| URI 스킴 통일 | ✅ | `lifeplus-sandbox` → `lifeplus-tribes` (모노레포 공통). iOS `CFBundleURLTypes` 에도 등록 |
 
-### 다음 단계 (Phase 2)
+### Phase 1.5 — iOS 라인 정상화 (2026-05-14)
 
-1. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 `BackHandler.exitApp()` 으로 임시
-2. **Page bundle 캐싱** — 같은 appName 재진입 시 `loadBundle` 재호출 회피
-3. **CDN URL fetch** — page bundle 을 원격 URL 에서 fetch + 캐시. 미니앱 추가/수정 시 APK 재배포 불필요
-4. **iOS multi-bundle** — `ios-wip/` 마무리 후
-5. **`ReactHostImpl.loadBundle` 의 public API 교체** — RN 0.84+ 에서 노출되면 reflection 제거
+| 항목 | 상태 | 비고 |
+|---|---|---|
+| ios-wip/ → ios/ 전환 | ✅ | RN 0.83.2 fresh init 의 Swift 템플릿 베이스로 재구성. ObjC 잔재 0 |
+| Bundle ID / URL scheme | ✅ | `com.lifeplus.sandbox` / `lifeplus-tribes` (Info.plist `CFBundleURLTypes`) |
+| DevToolViewController.swift | ✅ | ios-wip 의 코드 흡수, 동작 변경 없음 |
+| RNContainerViewController.swift | ✅ | `factory.rootViewFactory.view(withModuleName:initialProperties:)` 패턴으로 재작성 |
+| pbxproj Swift 등록 | ✅ | `ios/add_swift_sources.rb` (xcodeproj gem) 멱등 스크립트 |
+| iOS multi-bundle 평가 | ✅ | 2026-05-15 완성 — Phase 2-1 참조 |
+
+### Phase 2-1 — iOS multi-bundle host shell (2026-05-15 완료)
+
+| 항목 | 상태 | 비고 |
+|---|---|---|
+| Xcode 26.5 + macOS 26.3 환경 정착 | ✅ | `xcodes install 26.5 --select` + iOS 26.5 simulator runtime 다운로드 (~8.5GB) |
+| fmt 11.0.2 ↔ Apple clang 21 호환 패치 | ✅ | Podfile post_install 에서 `fmt/base.h` 의 `FMT_USE_CONSTEVAL` 매크로 체인 강제 0 (D-28, facebook/react-native#55601) |
+| Swift Explicit Modules disable | ✅ | Podfile post_install 의 `SWIFT_ENABLE_EXPLICIT_MODULES = NO` (D-28) |
+| RCTInstance prewarm | ✅ | `AppDelegate` 가 부팅 시 dummy moduleName 으로 `view(...)` 호출 → `RCTHost.start` 트리거 (D-23) |
+| RCTInstance reflection | ✅ | `class_getInstanceVariable(host, "_instance")` 로 RCTInstance 추출. `hostDidStart:` 가 캐치 (D-24) |
+| Multi-bundle 평가 | ✅ | `RCTInstance.callFunctionOnBufferedRuntimeExecutor:^(jsi::Runtime &){ runtime.evaluateJavaScript(...); }` (PageBundleLoader.mm, D-22) |
+| ObjC++ ↔ Swift bridging | ✅ | `PageBundleLoader.h/.mm` 격리 + `SandboxApp-Bridging-Header.h`. `RCTHost.h` 의 C++ STL 회피 (D-25) |
+| Page bundle 캐싱 | ✅ | `RNContainerViewController.loadedPages: Set<String>` 으로 두번째 진입부터 evaluate skip (D-26) |
+| iOS page bundle 배치 | ✅ | `ios/SandboxApp/{shared.bundle.js, pages/{moduleName}.bundle.js}` — Xcode folder reference (D-27) |
+| Verify (iPhone 17 Pro / iOS 26.5) | ✅ | `lifeplus-tribes://detail?orderId=ABC123` → `/detail` 페이지 + InitialProps + URI query 평탄화 전부 동작 |
+
+### 다음 단계 (Phase 2-2 이후)
+
+1. **iOS 17 simulator runtime 추가** — Xcode 26.5 환경에 iOS 17 runtime 다운로드 → iOS 17 + 26 multi-version verify 매트릭스 완성. 현재는 iOS 26.5 만 verify
+2. **`apps/native` 의 `yarn deploy:ios`** — 현재는 손으로 dist/ 산출물을 ios resources 로 배치. 정식 자동화 (Android `deploy:android` 의 iOS 짝)
+3. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 `BackHandler.exitApp()` / iOS `popViewController` 으로 임시
+4. **CDN URL fetch** — page bundle 을 원격 URL 에서 fetch + 캐시. 미니앱 추가/수정 시 APK/IPA 재배포 불필요
+5. **`ReactHostImpl.loadBundle` (Android D-14) + `RCTHost._instance` (iOS D-22/D-24) reflection 제거** — RN 0.84+ 에서 public API 가 나오면 동시에 제거 가능
+6. **이전 Xcode 정리** — `/Applications/Xcode.app` (15.4 빈 껍데기) + `Xcode-16.4.0.app` (5.9 GB) 삭제 가능
+7. **본 iOS 레포 (lp-mktplatform-ios) 와 Xcode 버전 핀 align** — `mise.toml` / Fastlane / GitHub Actions 확인
 
 ---
 
@@ -85,13 +112,22 @@
 
 ```
 sandbox-poc/
-  ios-wip/                       ← iOS 보류. 본작업 시 ios/ 로 이름 변경 후 Xcode에서 마무리
+  ios/
     SandboxApp/
-      AppDelegate.swift
-      RNContainerViewController.swift
-      DevToolViewController.swift
-      Info.plist                  (← URL scheme 추가 필요)
-    SandboxApp.xcodeproj          (← pbxproj 정합성 작업 필요)
+      AppDelegate.swift           ← @main, ReactNativeDelegate, URI 라우팅
+      DevToolViewController.swift ← URI 입력 + 최근 실행 목록
+      RNContainerViewController.swift ← URI 진입 시 page bundle 평가 + RN surface mount
+      PageBundleLoader.h/.mm      ← ObjC++ multi-bundle 평가 (RCTInstance reflection + jsi::Runtime)
+      SandboxApp-Bridging-Header.h ← Swift ↔ ObjC++ 브릿지
+      Info.plist                  ← CFBundleURLTypes (lifeplus-tribes)
+      shared.bundle.js            ← apps/native deploy:ios 산출물 (수동 배치 중 — 자동화 TODO)
+      pages/                      ← Xcode folder reference (파란 아이콘)
+        HelloRN.bundle.js
+        detail.bundle.js
+    SandboxApp.xcodeproj          ← pbxproj. Swift/ObjC++ 등록은 add_swift_sources.rb 멱등 스크립트
+    SandboxApp.xcworkspace        ← CocoaPods 통합. xed -b . 진입점
+    Podfile                       ← post_install 워크어라운드 (D-28): SWIFT_ENABLE_EXPLICIT_MODULES=NO + fmt/base.h FMT_USE_CONSTEVAL 패치
+    add_swift_sources.rb          ← pbxproj 에 새 source 파일 멱등 등록
   android/
     app/
       src/main/
@@ -99,7 +135,6 @@ sandbox-poc/
           SandboxApplication.kt   ← jsBundleFilePath="assets://shared.bundle.js"
           MainActivity.kt         ← URI host → loadPageBundle → ReactFragment commit
           DevToolFragment.kt      ← Metro IP 입력 + 정적/Metro 모드 토글
-          RNContainerFragment.kt  ← (DEPRECATED) RN 0.83 ReactFragment 로 대체. 잔존 파일
         assets/
           shared.bundle.js        ← apps/native deploy:android 산출물 (커밋)
           pages/
@@ -110,12 +145,16 @@ sandbox-poc/
       build.gradle
     build.gradle
     settings.gradle
-  HelloRN/                        ← MVP 시절 RN scratch. multi-bundle 도입 후로는 미사용 (gitignored)
+  Gemfile                         ← CocoaPods + xcodeproj gem (iOS 작업용)
+  package.json                    ← RN 0.83.2 + React 19.2.1 빌드 의존성 (gradle plugin 이 node_modules 참조)
+  node_modules/
   decisions.md
   README.md
 ```
 
 `assets/` 내용은 [apps/native](https://github.com/lp-mktplatform/life/tree/main/apps/native) 의 `yarn deploy:android` 가 채움. 본 레포에선 *받는 쪽 계약*만 정의.
+
+본 레포는 자체 RN 소스(`App.tsx` / `index.js` 등)는 없다. node_modules 가 필요한 이유는 단순히 **Android Gradle 빌드가 RN Gradle Plugin + `react-android` AAR + Hermes AAR 을 npm 패키지에서 해소**하기 때문 ([decisions.md](decisions.md) D-19). 디바이스 런타임에는 node 가 없어도 됨.
 
 ---
 
@@ -150,9 +189,76 @@ adb shell am start -W -a android.intent.action.VIEW \
 #   I ReactNativeJS: Running "HelloRN"
 ```
 
-### iOS (보류)
+### iOS
 
-`ios-wip/` 에 작성된 Swift + 정적 번들이 있지만 pbxproj 정합성 작업이 미완. Xcode GUI 또는 `xcodeproj` Ruby gem 으로 별도 수행 필요. 자세한 건 [decisions.md](decisions.md) 회고 1번.
+2026-05-15 multi-bundle verify 완료 ([decisions.md](decisions.md) 회고 2026-05-15). Phase 1.5 (ios-wip → ios 정상화, D-20) + Phase 2-1 (PageBundleLoader 기반 multi-bundle 평가, D-22~D-27) 한 사이클로 마감.
+
+#### 사전 요구 (한 번만)
+
+| 항목 | 버전 | 비고 |
+|---|---|---|
+| **macOS** | **26.2+ Tahoe** (또는 Sequoia 15.6+) | Xcode 26.x 의 minimum macOS |
+| **Xcode** | **26.5** (권장) | RN 0.83 ≥16.1 + App Store 제출 2026-04+ 의무 ≥26. `xcodes install 26.5 --select` ([decisions.md](decisions.md) 회고 환경 시리즈 #4) |
+| **iOS Simulator runtime** | **iOS 26.5** | Xcode 26.5 의 default SDK 만 들어옴, simulator runtime 은 별개. `xcodebuild -downloadPlatform iOS` 로 추가 (~8.5 GB) |
+| **Ruby** | ≥ **3.2** (3.2.11 권장) | macOS system Ruby 2.6 은 ffi 1.17+ 호환 X. `.ruby-version` 가 sandbox 루트에 박힘 → rbenv 가 자동 픽 |
+| **CocoaPods** | 1.16+ (Gemfile 이 강제) | 1.15.x 는 Ruby 3.2 `unicode_normalize` 버그 |
+| 셸 로케일 | `LANG=en_US.UTF-8` / `LC_ALL=en_US.UTF-8` | `pod install` 실행 시 필수 — Ruby 3.2 가 `Dir.pwd` 를 ASCII-8BIT 로 반환하면 cocoapods 가 죽음 |
+
+#### 빌드
+
+```bash
+# 1) Ruby + bundler (한 번만)
+brew install rbenv ruby-build
+rbenv install -s 3.2.11
+eval "$(rbenv init - $(basename $SHELL))"
+cd path/to/sandbox
+bundle install   # cocoapods 1.16+, xcodeproj, activesupport, ...
+
+# 2) Xcode 26.5 + iOS simulator runtime (한 번만)
+xcodes install 26.5 --select
+sudo xcodebuild -license accept
+xcodebuild -runFirstLaunch
+xcodebuild -downloadPlatform iOS   # iOS 26.5 simulator runtime (~8.5 GB)
+
+# 3) pod install (LANG + Podfile 워크어라운드 자동 적용)
+#    Podfile post_install 이 (a) SWIFT_ENABLE_EXPLICIT_MODULES=NO + (b) fmt/base.h FMT_USE_CONSTEVAL=0 패치를 한다 (D-28)
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+cd ios
+bundle exec pod install
+
+# 4) page bundle 배치 (apps/native deploy:ios 자동화 전까진 수동)
+#    ios/SandboxApp/shared.bundle.js
+#    ios/SandboxApp/pages/{moduleName}.bundle.js  (예: HelloRN, detail)
+#    Xcode 에서 folder reference 로 추가 (파란색 아이콘). 그래야 .app/pages/ 디렉토리가 유지됨 (D-27)
+
+# 5) Xcode 열기
+xed -b .   # 또는 open SandboxApp.xcworkspace
+
+# 6) xcodebuild CLI 빌드 (시뮬레이터)
+bundle exec xcodebuild \
+  -workspace SandboxApp.xcworkspace \
+  -scheme SandboxApp \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -derivedDataPath build \
+  build
+
+# 7) 시뮬레이터 부팅 + 앱 설치 + URL scheme 진입
+xcrun simctl boot "iPhone 17 Pro"
+open -a Simulator
+xcrun simctl install booted build/Build/Products/Debug-iphonesimulator/SandboxApp.app
+xcrun simctl launch booted com.lifeplus.sandbox
+xcrun simctl openurl booted "lifeplus-tribes://detail?orderId=ABC123"
+# NSLog (console=stdout 모드일 때):
+#   [sandbox-poc] open url=lifeplus-tribes://detail?orderId=ABC123 appName=detail path=/ params=["orderId":"ABC123"]
+#   [sandbox-poc] loading page bundle: file://.../pages/detail.bundle.js
+#   [PageBundleLoader] captured RCTInstance: 0x...
+#   [sandbox-poc] page bundle evaluated: detail
+#   [sandbox-poc] mounted RN surface moduleName=detail initialPath=/ params=["orderId":"ABC123"]
+```
+
+pbxproj 에 새 Swift / ObjC++ 파일을 추가할 일이 생기면 `ios/add_swift_sources.rb` 에 항목을 더하고 `bundle exec ruby ios/add_swift_sources.rb` 재실행 (멱등).
 
 ---
 
@@ -213,7 +319,7 @@ override val reactHost: ReactHost by lazy {
 
 ## Multi-bundle 로더 내부 동작
 
-`MainActivity.loadPageBundle` 가 핵심. 호출 흐름:
+### Android — `MainActivity.loadPageBundle`
 
 1. **`ReactInstance` 가 살아있는지 확인** — `reactHost.currentReactContext != null`
    - 살아있으면 즉시 `invokeLoadBundle` 호출 (warm path, 두번째 진입부터)
@@ -222,6 +328,19 @@ override val reactHost: ReactHost by lazy {
 3. **`ReactHostImpl.loadBundle$ReactAndroid_debug(loader)`** — reflection 으로 호출. Kotlin `internal` 가시성을 JVM mangled name prefix match 로 우회
 4. **Bolts `Task<Boolean>` 폴링** — `isCompleted` / `isFaulted` / `getResult` / `getError` 를 16ms 단위로 체크 (page bundle 평가 끝나는 시점 감지)
 5. **성공 시** — 그 안의 `AppRegistry.registerComponent({appName}, ...)` 가 이미 호출됨 → `ReactFragment.Builder().setComponentName(appName)` 로 surface mount
+
+### iOS — `PageBundleLoader.evaluatePageBundle` + `RNContainerViewController`
+
+Android 의 `loadPageBundle` 시퀀스를 RN 0.83 Bridgeless iOS 의 표준 진입점으로 변환:
+
+1. **prewarm** — `AppDelegate.didFinishLaunchingWithOptions` 가 부팅 시 `factory.rootViewFactory.view(withModuleName: "__prewarm", ...)` 한 번 호출. 이게 `RCTHost.start` 를 트리거 → shared.bundle 평가 + RCTInstance 생성 (D-23)
+2. **RCTInstance capture** — `SandboxReactNativeDelegate.hostDidStart:` 가 발화되면 `class_getInstanceVariable(host, "_instance")` reflection 으로 RCTInstance 추출, static 변수에 보관 (Android `loadBundle$ReactAndroid_debug` reflection 의 iOS 짝, D-24)
+3. **page URL lookup** — `Bundle.main.url(forResource: "{moduleName}.bundle", withExtension: "js", subdirectory: "pages")` — Android `assets://pages/{appName}.bundle.js` 의 iOS 짝 (D-27, folder reference 필수)
+4. **page bundle 평가** — `RCTInstance.callFunctionOnBufferedRuntimeExecutor:^(jsi::Runtime &rt){ rt.evaluateJavaScript(StringBuffer(source), url); }` — RN 0.74+ Bridgeless 의 표준 JS thread hop. callstack/react-native-sandbox 패턴 (D-22). RCTInstance 가 polling 안 잡히면 16ms × max 5s 가드
+5. **surface mount** — `factory.rootViewFactory.view(withModuleName: appName, initialProperties: ...)` — page bundle 안 `AppRegistry.registerComponent({appName}, ...)` 가 이미 호출돼 있어야 동작. Android `ReactFragment.Builder().setComponentName` 의 iOS 짝
+6. **warm path** — `RNContainerViewController.loadedPages: Set<String>` 가 동일 appName 재진입 시 evaluate skip → 즉시 mountSurface (D-26)
+
+iOS 측 모든 단계가 ObjC++ (`PageBundleLoader.mm`) 에서 격리 처리되는 이유는 `RCTHost.h` 가 C++ STL 을 끌어와 Swift bridging header 가 못 받기 때문 (D-25). Swift 측은 `SandboxReactNativeDelegate` 라는 ObjC++ base class 만 import 받고 상속.
 
 ### Reflection 우회의 근거
 
@@ -284,15 +403,32 @@ JS 측 `useInitialProps()` 가 이걸 그대로 받음. 타입 정의는 [apps/n
 | 에뮬레이터에서 `localhost` 입력 시 Metro 안 됨 | 에뮬레이터의 `localhost` 는 *에뮬레이터 자기 자신* | 호스트 머신은 `10.0.2.2`. 실기기는 `adb reverse tcp:8081 tcp:8081` 후 `localhost:8081` |
 | JS 수정했는데 화면 그대로 | force-stop 안 하고 다시 띄움 → 기존 RN 인스턴스가 살아있어서 새 bundle 안 받음 | `adb shell am force-stop com.lifeplus.sandbox` 후 재진입 |
 | 본앱(lifeplus tribes)이 같이 설치된 디바이스에서 disambiguator 다이얼로그가 뜸 | `lifeplus-tribes` 스킴이 두 앱에 동시 등록됨 | 의도된 동작 ([decisions.md](decisions.md) D-3). sandbox-poc 가 본앱 host shell 로 흡수되는 경로에서는 한 앱으로 통합될 예정 |
+| (iOS) `xcodebuild build` 가 fmt `FMT_STRING` 매크로에서 5개 에러 | Apple clang 21 (Xcode 26) 의 strict consteval 이 fmt 11.0.2 의 매크로 거부 | Podfile post_install 의 `fmt/base.h` 패치가 자동 적용. `pod install` 출력에 `patched fmt/base.h: FMT_USE_CONSTEVAL forced 0 for Xcode 26` 로그 확인 (D-28) |
+| (iOS) `Ineligible destination ... iOS 26.5 is not installed` | Xcode 26.5 가 default SDK 만 들고 옴, simulator runtime 별개 | `xcodebuild -downloadPlatform iOS` 로 iOS 26.5 simulator runtime 추가 다운로드 (~8.5GB) |
+| (iOS) `No script URL provided` redbox | `shared.bundle.js` 가 `.app` 안에 없음. AppDelegate.bundleURL 의 1번 분기 (`Bundle.main.url(forResource: "shared.bundle", ...)`) 가 nil → DEBUG 빌드는 Metro 로 fallback 시도, Metro 도 없으면 redbox | `ios/SandboxApp/shared.bundle.js` 배치 + Xcode 가 인식하도록 folder reference 추가. `apps/native deploy:ios` 자동화 전까진 수동 |
+| (iOS) `RCTInstance not captured within timeout` | `SandboxReactNativeDelegate.hostDidStart:` 가 발화 안 됨. RCTHost.start 가 트리거 안 됐거나 base class 가 `RCTDefaultReactNativeFactoryDelegate` 가 아님 | AppDelegate 의 prewarm `factory.rootViewFactory.view(withModuleName: "__prewarm", ...)` 호출이 살아있는지 확인 (D-23). Swift `ReactNativeDelegate` 가 `SandboxReactNativeDelegate` 를 상속하는지 확인 (D-25) |
+| (iOS) `PageBundleLoader ❌ RCTHost has no _instance ivar` | RN 업그레이드로 `_instance` ivar 명이 바뀜 | RN 0.84+ 에서 public API 가 나왔는지 확인. 임시 우회는 `RCTHostImpl.h` 안의 ivar 이름 갱신 (D-24) |
+| (iOS) log show 결과가 `<compose failure [shared UUID]>` 로 가려짐 | macOS 26 의 `os_log` private-data 기본 차단 — NSLog format 변수가 private 마킹 | `xcrun simctl launch --console booted com.lifeplus.sandbox` 로 stdout 직접 캡처. 또는 `log config --enable-private-data` |
 
 ---
 
 ## 좌표
 
+### Android
 - **부팅 호스트**: [SandboxApplication.kt](android/app/src/main/java/com/lifeplus/sandbox/SandboxApplication.kt)
 - **URI 파싱 + Multi-bundle 로더**: [MainActivity.kt](android/app/src/main/java/com/lifeplus/sandbox/MainActivity.kt) (`handleIntent` / `loadPageBundle` / `invokeLoadBundle` / `pollTaskCompletion`)
 - **DevTool UI**: [DevToolFragment.kt](android/app/src/main/java/com/lifeplus/sandbox/DevToolFragment.kt) + [fragment_devtool.xml](android/app/src/main/res/layout/fragment_devtool.xml)
 - **URI 스킴 등록**: [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) (`<data android:scheme="lifeplus-tribes" />`)
+
+### iOS
+- **부팅 호스트 + URI 파싱**: [AppDelegate.swift](ios/SandboxApp/AppDelegate.swift) (`application(_:didFinishLaunchingWithOptions:)` 가 RCTInstance prewarm + DevTool 마운트, `application(_:open:options:)` 가 URI 진입)
+- **Multi-bundle 평가**: [PageBundleLoader.h](ios/SandboxApp/PageBundleLoader.h) + [PageBundleLoader.mm](ios/SandboxApp/PageBundleLoader.mm) (`captureRCTInstanceFromHost:` / `evaluatePageBundleAtURL:completion:`)
+- **RN surface mount + page 캐싱**: [RNContainerViewController.swift](ios/SandboxApp/RNContainerViewController.swift) (`loadedPages` / `pageBundleURL(for:)` / `mountSurface`)
+- **DevTool UI**: [DevToolViewController.swift](ios/SandboxApp/DevToolViewController.swift)
+- **URI 스킴 등록**: [Info.plist](ios/SandboxApp/Info.plist) (`CFBundleURLTypes`)
+- **Podfile 워크어라운드**: [Podfile](ios/Podfile) (`SWIFT_ENABLE_EXPLICIT_MODULES=NO` + `fmt/base.h FMT_USE_CONSTEVAL` 패치, D-28)
+
+### 공통
 - **미니앱 번들 소스**: life 모노레포 [apps/native](https://github.com/lp-mktplatform/life/tree/main/apps/native) (별도 레포)
 - **결정 회고**: [decisions.md](decisions.md)
 
@@ -303,7 +439,7 @@ JS 측 `useInitialProps()` 가 이걸 그대로 받음. 타입 정의는 [apps/n
 | 항목 | 이유 |
 |---|---|
 | Fast Refresh / dev menu / redbox UI | sandbox-poc 는 Native Shell 컨테이너. RN 개발 환경(Metro) 은 별도로 가짐 |
-| 자체 RN 컴포넌트 (`HelloRN/App.tsx` 등) | apps/native 가 미니앱 소스의 단일 진실의 원천. 본 레포에는 RN 코드 없음 |
-| `RNContainerFragment` 같은 자체 Fragment | RN 0.83 의 공식 `ReactFragment.Builder` 가 lifecycle/surface 를 자동 처리. 잔존 파일은 제거 예정 |
+| 자체 RN 컴포넌트 (`App.tsx` 등) | apps/native 가 미니앱 소스의 단일 진실의 원천. 본 레포에는 RN 코드 없음 |
+| `RNContainerFragment` 같은 자체 Fragment | RN 0.83 의 공식 `ReactFragment.Builder` 가 lifecycle/surface 를 자동 처리. 자체 Fragment 구현은 시도했다가 흰 화면 → 폐기 ([decisions.md](decisions.md) 회고 RN 0.83 2번) |
 | 푸시 / 권한 / 기존 SDK 통합 | Phase 3 |
-| iOS multi-bundle | ios-wip/ 마무리 후 별도 작업 |
+| 이전 — iOS multi-bundle | 2026-05-15 완성 (PageBundleLoader.mm, D-22) |

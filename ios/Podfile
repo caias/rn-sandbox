@@ -1,0 +1,65 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'SandboxApp' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
+    # Xcode 26 + RN 0.83 Swift Explicit Modules 이슈 워크어라운드 (decisions.md D-22 회고 4 참조)
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |c|
+        c.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      end
+    end
+
+    # Xcode 26 의 Apple clang 21 이 fmt 11.0.2 의 FMT_STRING 매크로를 consteval 위반으로 거부.
+    # 참고: facebook/react-native#55601, fmtlib/fmt#4740. RN 0.84+ 의 fmt 업그레이드까지 임시방편.
+    #
+    # fmt/base.h:113-132 의 FMT_USE_CONSTEVAL 매크로 체인은 외부 -D 로 덮을 수 없는 구조 (체인이
+    # 무조건 #define 한다). 헤더 자체를 패치해서 두 1-경로 (line 127, 129) 를 모두 0 으로 강제.
+    fmt_base_h = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base_h)
+      content = File.read(fmt_base_h)
+      marker = "/* sandbox-poc: FMT_USE_CONSTEVAL forced 0 for Xcode 26 (Apple clang 21) */"
+      unless content.include?("sandbox-poc: FMT_USE_CONSTEVAL")
+        patched = content.sub(
+          /(#elif defined\(__cpp_consteval\)\n)#  define FMT_USE_CONSTEVAL 1\n(#elif FMT_GCC_VERSION >= 1002 \|\| FMT_CLANG_VERSION >= 1101\n)#  define FMT_USE_CONSTEVAL 1/,
+          "\\1#  define FMT_USE_CONSTEVAL 0\n\\2#  define FMT_USE_CONSTEVAL 0  #{marker}"
+        )
+        if patched == content
+          raise "fmt/base.h patch failed — magic strings not found. Check fmt version (expected 11.0.2)."
+        end
+        # CocoaPods 가 source 를 readonly (-r--r--r--) 로 설치하므로 write 전 chmod
+        File.chmod(0o644, fmt_base_h)
+        File.write(fmt_base_h, patched)
+        Pod::UI.puts "patched fmt/base.h: FMT_USE_CONSTEVAL forced 0 for Xcode 26".green
+      end
+    end
+  end
+end

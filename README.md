@@ -95,16 +95,16 @@
 | Page bundle 캐싱 | ✅ | `RNContainerViewController.loadedPages: Set<String>` 으로 두번째 진입부터 evaluate skip (D-26) |
 | iOS page bundle 배치 | ✅ | `ios/SandboxApp/{shared.bundle.js, pages/{moduleName}.bundle.js}` — Xcode folder reference (D-27) |
 | Verify (iPhone 17 Pro / iOS 26.5) | ✅ | `lifeplus-tribes://detail?orderId=ABC123` → `/detail` 페이지 + InitialProps + URI query 평탄화 전부 동작 |
+| Verify (iPhone 15 Pro / iOS 17.5) | ✅ | 동일 `.app` (재빌드 X) 을 iOS 17.5 시뮬에 install → 동일 화면. 단일 빌드 산출물의 multi-version 매트릭스 확정 |
 
 ### 다음 단계 (Phase 2-2 이후)
 
-1. **iOS 17 simulator runtime 추가** — Xcode 26.5 환경에 iOS 17 runtime 다운로드 → iOS 17 + 26 multi-version verify 매트릭스 완성. 현재는 iOS 26.5 만 verify
-2. **`apps/native` 의 `yarn deploy:ios`** — 현재는 손으로 dist/ 산출물을 ios resources 로 배치. 정식 자동화 (Android `deploy:android` 의 iOS 짝)
-3. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 `BackHandler.exitApp()` / iOS `popViewController` 으로 임시
+1. **`apps/native` 의 `yarn deploy:ios`** — 현재는 손으로 dist/ 산출물을 ios resources 로 배치. 정식 자동화 (Android `deploy:android` 의 iOS 짝)
+2. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 `BackHandler.exitApp()` / iOS `popViewController` 으로 임시
+3. **NavBar UI 정리** — iOS NavController 의 NavBar 와 RN 페이지 색 충돌. 본 앱 host shell 통합 시점에 처리
 4. **CDN URL fetch** — page bundle 을 원격 URL 에서 fetch + 캐시. 미니앱 추가/수정 시 APK/IPA 재배포 불필요
 5. **`ReactHostImpl.loadBundle` (Android D-14) + `RCTHost._instance` (iOS D-22/D-24) reflection 제거** — RN 0.84+ 에서 public API 가 나오면 동시에 제거 가능
-6. **이전 Xcode 정리** — `/Applications/Xcode.app` (15.4 빈 껍데기) + `Xcode-16.4.0.app` (5.9 GB) 삭제 가능
-7. **본 iOS 레포 (lp-mktplatform-ios) 와 Xcode 버전 핀 align** — `mise.toml` / Fastlane / GitHub Actions 확인
+6. **본 iOS 레포 (lp-mktplatform-ios) 와 Xcode 버전 핀 align** — `mise.toml` / Fastlane / GitHub Actions 확인
 
 ---
 
@@ -409,6 +409,7 @@ JS 측 `useInitialProps()` 가 이걸 그대로 받음. 타입 정의는 [apps/n
 | (iOS) `RCTInstance not captured within timeout` | `SandboxReactNativeDelegate.hostDidStart:` 가 발화 안 됨. RCTHost.start 가 트리거 안 됐거나 base class 가 `RCTDefaultReactNativeFactoryDelegate` 가 아님 | AppDelegate 의 prewarm `factory.rootViewFactory.view(withModuleName: "__prewarm", ...)` 호출이 살아있는지 확인 (D-23). Swift `ReactNativeDelegate` 가 `SandboxReactNativeDelegate` 를 상속하는지 확인 (D-25) |
 | (iOS) `PageBundleLoader ❌ RCTHost has no _instance ivar` | RN 업그레이드로 `_instance` ivar 명이 바뀜 | RN 0.84+ 에서 public API 가 나왔는지 확인. 임시 우회는 `RCTHostImpl.h` 안의 ivar 이름 갱신 (D-24) |
 | (iOS) log show 결과가 `<compose failure [shared UUID]>` 로 가려짐 | macOS 26 의 `os_log` private-data 기본 차단 — NSLog format 변수가 private 마킹 | `xcrun simctl launch --console booted com.lifeplus.sandbox` 로 stdout 직접 캡처. 또는 `log config --enable-private-data` |
+| (iOS 17) `simctl openurl` 시 "Sandbox에서 열겠습니까?" 다이얼로그 | iOS 17 의 보안 — 새 launch session 으로 진입할 때 사용자 동의. iOS 26 에선 없음 | 같은 process 가 살아있는 상태에서 openurl 호출 (`launch --console &` 백그라운드로 띄우고 sleep 후 openurl). 즉 same-app self-invocation 패턴이면 다이얼로그 회피 |
 
 ---
 

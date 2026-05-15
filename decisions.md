@@ -73,7 +73,7 @@
 - [ ] RN 0.84+ 에서 `loadBundle` public API 가 노출되면 D-14 reflection 제거
 - [ ] RN 0.84+ 에서 `RCTHost._instance` 가 public 으로 노출되거나 second-bundle 평가 표준 API 가 나오면 D-22/D-24 reflection 제거
 - [ ] 본 iOS 레포 (lp-mktplatform-ios) 의 Xcode 버전 핀 (`mise.toml` / Fastlane / GitHub Actions) 확인 → sandbox 표준 (Xcode 26.5) 과 align
-- [ ] iOS 17 simulator runtime 을 Xcode 26.5 에 추가해서 multi-version verify 매트릭스 완성 (현재는 iOS 26.5 만 verify)
+- [x] ~~iOS 17 simulator runtime 을 Xcode 26.5 에 추가해서 multi-version verify 매트릭스 완성~~ — 2026-05-15 완료. iOS 17.5 runtime 이 시스템 catalog 에 이미 Ready 상태 (Xcode 16.4 가 들고있던 게 본체 삭제 후에도 남음). 동일 `.app` (Xcode 26.5 + iOS 26.5 SDK, deployment target 15.1) 이 iPhone 15 Pro / iOS 17.5 에서도 동일 동작 확인
 - [ ] fmt 11.0.2 → 11.1+ 또는 RN 0.84 의 fmt 업그레이드 시 D-28 (Podfile fmt 패치) 제거
 
 ---
@@ -339,7 +339,9 @@ Apple 공식 system-requirements 기준 (https://developer.apple.com/xcode/syste
 
 ### 발견 1: Xcode SDK ↔ Simulator runtime 의 분리
 
-`xcodes install 26.5 --select` 만으론 simulator 검증 불가. Xcode 26.5 의 default SDK = **iOS 26.5 SDK 만 번들**, iOS 17 SDK 는 같이 안 옴. 기존 Xcode 16.4 가 들고 있던 iOS 17.5 simulator 는 `Ineligible` (SDK mismatch). 시뮬레이터 검증하려면 `xcodebuild -downloadPlatform iOS` 로 default iOS runtime 추가 다운로드 필수. multi-version verify 매트릭스 (iOS 17 + iOS 26) 를 원하면 Xcode 26.5 *환경에* iOS 17 simulator runtime 도 추가 다운로드 (Xcode > Settings > Platforms > "Get") — 본 스프린트에선 iOS 26.5 만 verify, iOS 17 은 TODO.
+`xcodes install 26.5 --select` 만으론 simulator 검증 불가. Xcode 26.5 의 default SDK = **iOS 26.5 SDK 만 번들**, iOS 17 SDK 는 같이 안 옴. 기존 Xcode 16.4 가 들고 있던 iOS 17.5 simulator 는 `xcodebuild build -destination 'OS=17.5'` 시점에 `Ineligible` (build 가 iOS 26.5 SDK 를 요구하는데 17 destination 매칭 X). 빌드 검증하려면 `xcodebuild -downloadPlatform iOS` 로 default iOS 26 runtime 추가 다운로드 필수.
+
+**단 빌드 destination 과 install 가능 destination 은 별개**: Xcode 26.5 + iOS 26.5 SDK 로 빌드된 `.app` (deployment target 15.1) 은 iOS 17.5 simulator 에 install + run 가능 (2026-05-15 검증). 즉 **multi-version verify 매트릭스는 단일 빌드 산출물을 여러 OS 시뮬에 install 하는 형태** — Xcode 26.5 환경에 iOS 17 simulator runtime 만 있으면 충분 (별도 빌드 destination 필요 없음). iOS 17.5 runtime 은 시스템 catalog 에 disk image 로 살아있어 Xcode 16.4 삭제 후에도 그대로 사용 가능.
 
 ### 발견 2: fmt 11.0.2 ↔ Apple clang 21 (Xcode 26) consteval 호환 X
 
@@ -394,14 +396,22 @@ Android 의 `addReactInstanceEventListener` (cold path 대기) + `currentReactCo
 
 → 즉 shared.bundle 평가 + page bundle (`pages/detail.bundle.js`) 동적 평가 + `AppRegistry.registerComponent("detail", ...)` + RN surface mount + InitialProps 전달 + URI query 평탄화까지 **전 라인 통과**. iOS Phase 1.5 + Phase 2-1 (D-22) 한 번에 완성.
 
+### iOS 17.5 multi-version verify (2026-05-15 추가 검증)
+
+`xcodes uninstall 16.4` + Xcode.app (15.4) 삭제 후 같은 cycle 을 iOS 17.5 에서 재실행:
+
+- iOS 17.5 simulator runtime 이 시스템 catalog 에 disk image 로 남아있음 (Xcode 16.4 본체 삭제 후에도) — `xcrun simctl runtime list` 가 `iOS 17.5 (21F79) ... (Ready)` 보고
+- 동일 `.app` (재빌드 X, 26.5 빌드 산출물 그대로) 을 `xcrun simctl install "iPhone 15 Pro" ...` 으로 install
+- `xcrun simctl launch --console + sleep 5 + openurl + sleep 6` 시퀀스로 same-process launch flow 유지 (kill 타이밍 어긋나면 iOS 17 의 "Sandbox에서 열겠습니까?" 사용자 동의 다이얼로그가 떠 verify 중단됨 — iOS 26 에선 안 뜸)
+- 결과: 동일 화면 (`/detail` + InitialProps + `orderId=ABC123`). 즉 **Xcode 26.5 + iOS 26.5 SDK 빌드 산출물이 iOS 17 ~ 26 매트릭스에서 동작 일관성 확보**
+
 ### 다음 스프린트
 
-1. **iOS 17 simulator runtime 추가** (Xcode 26.5 환경에) → iOS 17 + 26 multi-version verify 매트릭스 완성
-2. **`apps/native` 의 `yarn deploy:ios`** — 현재는 사용자가 손으로 dist/ 산출물을 `ios/SandboxApp/{shared.bundle.js, pages/*.bundle.js}` 로 배치한 상태. 정식 자동화 필요 (Android `deploy:android` 의 iOS 짝)
-3. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 iOS `popViewController` / Android `BackHandler.exitApp()` 으로 임시
-4. **CDN URL fetch** — page bundle 을 원격 URL 에서 fetch + 캐시. RCTJavaScriptLoader.loadBundleAtURL: 가 file:// 외 http(s):// 도 지원하는지 검증 필요
-5. **이전 Xcode 정리** — `/Applications/Xcode.app` (15.4 빈 껍데기) + `Xcode-16.4.0.app` (5.9 GB) 삭제 가능
-6. **본 iOS 레포 (lp-mktplatform-ios) 의 Xcode 버전 핀 확인 + align**
+1. **`apps/native` 의 `yarn deploy:ios`** — 현재는 사용자가 손으로 dist/ 산출물을 `ios/SandboxApp/{shared.bundle.js, pages/*.bundle.js}` 로 배치한 상태. 정식 자동화 필요 (Android `deploy:android` 의 iOS 짝)
+2. **NavBridge NativeModule** — JS → Native pop/replace. 현재는 iOS `popViewController` / Android `BackHandler.exitApp()` 으로 임시
+3. **NavBar UI 정리** — `RNContainerViewController` 가 `UINavigationController` push 패턴인데 iOS 17 에선 NavBar 가 light 로 그려져 RN 페이지와 색 안 맞음. `setNavigationBarHidden(true)` 또는 RN side 에서 자체 nav 처리 결정. 본 앱 host shell 통합 시 정리
+4. **CDN URL fetch** — page bundle 을 원격 URL 에서 fetch + 캐시. `RCTJavaScriptLoader.loadBundleAtURL:` 가 file:// 외 http(s):// 도 지원하는지 검증 필요
+5. **본 iOS 레포 (lp-mktplatform-ios) 의 Xcode 버전 핀 확인 + align** — sandbox 의 Xcode 26.5 표준이 본 레포와 동기되는지
 
 ### 학습
 

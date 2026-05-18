@@ -64,17 +64,33 @@
 
 ---
 
+## NavBridge (NativeModule) 도입 (2026-05-18)
+
+| # | 항목 | 결정 | 근거 / 비고 |
+|---|---|---|---|
+| D-29 | NativeModule contract | **`@lifeplus/native-bridge`** (git+`lp-mktplatform/lp-mktplatform-native-bridge#feature/native-bridge`) — JSON Schema 단일 소스에서 TypeScript SDK + Swift / Kotlin 타입을 quicktype 으로 자동 생성 | sandbox 가 NativeModule 인터페이스를 손으로 정의하면 본 앱 통합 시 drift 발생. native-bridge 의 `sdk-native.ts` 가 `NativeModules.LifePlusApp[command](params)` Promise wrap 표준. `platforms: ["native"]` 인 `back` + `platforms: ["web", "native"]` 인 `share` 를 first cut. sandbox 는 ObjC++ (`LifePlusApp.h/.mm`) + Kotlin (`LifePlusAppModule.kt` + `LifePlusAppPackage.kt`) 로 구현하고 `SandboxApplication.reactHost` 의 packageList 에 `LifePlusAppPackage()` 수동 합치기. 본 앱 host shell 통합 시 같은 native-bridge 패키지로 한 줄에 alignment |
+| D-30 | NativeModule arg-수 mismatch 함정 | **void 커맨드도 `params: ReadableMap?` 자리를 시그니처에 둔다.** Android: `@ReactMethod fun back(params: ReadableMap?, promise: Promise)`. iOS: `RCT_REMAP_METHOD(back, backWithParams:(NSDictionary*)params resolver:... rejecter:...)` | `native-bridge/generated/typescript/sdk-native.ts` 의 `call(command, params?)` helper 가 params 가 없어도 항상 `fn(undefined)` 1-arg 로 호출. Android TurboModule 가드가 사용자 arg 수 vs 시그니처 arg 수를 strict 비교 → `TurboModule method "back" called with 1 arguments (expected argument count: 0)` FATAL 발생 (Hermes 가 JS Error 로 던지고 ExceptionsManagerModule 가 native 예외로 승격). 시그니처에 자리만 잡아 두면 한 줄 비용으로 양쪽 다 동작. iOS 도 mismatch 시 silent 가 아니라 RN bridge layer 에서 reject 되므로 같이 맞춤 |
+| D-31 | sandbox Android `back()` 마지막 pop = DevTool 노출 | `MainActivity.showRN` 이 URI 진입 시 항상 `showDevTool()` 을 root commit 으로 깔고 그 위에 RN ReactFragment 를 `addToBackStack(appName)`. native back 은 `backStackEntryCount > 0` 면 popBackStack, 비어있으면 `activity.finish()` | sandbox 단독 검증 환경 기준. 초기 구현은 마지막 fragment pop 시 `finish()` 로 launcher 복귀였으나 iOS 의 `viewControllers.count<=1` no-op (DevTool 노출) 과 비대칭이라 통일. 본 앱 host shell 통합 시점엔 DevTool 이 사라지고 본앱 navigator 가 root 가 되므로 이 분기 자체가 폐기됨 (D-33 참조) |
+| D-32 | sandbox iOS `back()` root no-op | `UINavigationController.viewControllers.count <= 1` 이면 `resolve([NSNull null])` 으로 silent 종결. reject 안 함 | iOS sandbox 는 DevTool 이 nav root 이므로 root 에서 native back 호출은 사용자 실수일 뿐 에러 아님. JS 측에서 `back()` 이 어디서 호출됐는지 알 수 없으니 reject 하면 false positive 에러 다이얼로그가 뜸. 본 앱 host shell 통합 시 root 의미가 바뀜 (D-33) |
+| D-33 | NavBridge 구현체는 **호스트 책임** (A안) | `@lifeplus/native-bridge` 가 스키마 + JS SDK 까지만 single source of truth, **NativeModule `LifePlusApp` 의 native 구현은 호스트마다 자기 navigator 에 맞춰 새로 작성**. sandbox 의 `LifePlusApp.mm` + `LifePlusAppModule.kt` 는 **sandbox 단독 시나리오용 reference 구현**일 뿐, 본 앱 host shell 통합 시점에 본앱이 자체 navigator 와 묶인 새 구현체로 대체 | 본 앱 navigator 가 sandbox 와 본질적으로 다름. **iOS 본앱** = UIKit `AppDelegate` + `SceneDelegate` + SwiftUI `AppRouterView` (`StatusBarStyleHostingController`). `back()` 의 의미 = SwiftUI `NavigationPath` pop 또는 `dismiss(animated:)`. **Android 본앱** = Compose 단독 + Navigation3 (`NavDisplay` + `backStack`). `back()` = `backStack.removeLast()` 또는 `_deepLinkChannel` 로 navigator 에 신호. delegate 패턴 (B안) 도 검토했지만 NativeModule 자체가 호스트당 1개라 인터페이스 한 겹 더 두는 추상화 비용이 이득 대비 큼. 결론: **JS SDK 통일 + 구현체 호스트별** 이 최소 결합. sandbox 의 D-31/D-32 비대칭 분기는 호스트별 root 가 다르다는 본질적 차이의 표면이고, 본앱 통합 시점에 자연 해소 |
+
+---
+
 ## 추후 재확인 필요
 
-- [ ] iOS Tuist `Project.swift`에서 Deployment Target 실제값 추출 → D-4 갱신
+- [x] ~~iOS Tuist `Project.swift`에서 Deployment Target 실제값 추출 → D-4 갱신~~ → **iOS 17.0** (`lp-mktplatform-ios/LifePlus/Tuist/ProjectDescriptionHelpers/Target+extensions.swift:34` 의 `.iOS("17.0")`). 2026-05-15 GitHub MCP 직접 조회
 - [ ] Swift 6 strict concurrency 환경에서 RN ObjC bridge 통과 여부 → D-1, D-8 갱신
 - [ ] AppsFlyer DeepLinkIngressQueue 동작과 RN 진입 순서 충돌 여부 (iOS 분석 6.1 참조)
 - [ ] `singleTop` 유지 vs `singleTask` 변경 (Android 분석 6.1 참조)
 - [ ] RN 0.84+ 에서 `loadBundle` public API 가 노출되면 D-14 reflection 제거
 - [ ] RN 0.84+ 에서 `RCTHost._instance` 가 public 으로 노출되거나 second-bundle 평가 표준 API 가 나오면 D-22/D-24 reflection 제거
-- [ ] 본 iOS 레포 (lp-mktplatform-ios) 의 Xcode 버전 핀 (`mise.toml` / Fastlane / GitHub Actions) 확인 → sandbox 표준 (Xcode 26.5) 과 align
+- [x] ~~본 iOS 레포 (lp-mktplatform-ios) 의 Xcode 버전 핀 (`mise.toml` / Fastlane / GitHub Actions) 확인 → sandbox 의 Xcode 26.5 표준과 align~~ → 2026-05-15 조회 결과. `mise.toml` 에 Xcode 핀 없음 (tuist 4.178 + swiftlint 0.57.1 만). `develop-ci.yml` 은 `macos-latest` 의 default Xcode + `xcodebuild -version` 메이저 ≥16 소프트 가드. **`develop-cd.yml:43`** 가 **`XC_VERSION='14.2'` + `runs-on: macos-12`** (deprecated runner) 강제 → RN 0.83 호환 불가, App Store 제출 (2026-04+ Xcode 26 의무) 불가. **본 레포 통합 P0**: CD workflow 를 `Xcode 26.5 + macos-26 runner` 로 점프 + CI workflow Xcode 핀 명시화
 - [x] ~~iOS 17 simulator runtime 을 Xcode 26.5 에 추가해서 multi-version verify 매트릭스 완성~~ — 2026-05-15 완료. iOS 17.5 runtime 이 시스템 catalog 에 이미 Ready 상태 (Xcode 16.4 가 들고있던 게 본체 삭제 후에도 남음). 동일 `.app` (Xcode 26.5 + iOS 26.5 SDK, deployment target 15.1) 이 iPhone 15 Pro / iOS 17.5 에서도 동일 동작 확인
 - [ ] fmt 11.0.2 → 11.1+ 또는 RN 0.84 의 fmt 업그레이드 시 D-28 (Podfile fmt 패치) 제거
+- [ ] 본 iOS 레포의 RN podspec 통합 전략 — Tuist 4 가 podspec 직접 import 안 함. 후보: (a) Tuist + CocoaPods 하이브리드, (b) RN SPM wrap, (c) Tuist External Targets. 본 레포 통합의 가장 큰 unblocker
+- [ ] sandbox PageBundleLoader.mm 에 Swift 6 strict concurrency 가드 추가 — `gRctInstance` static cross-thread 접근. 본 레포 통합 시 `nonisolated(unsafe)` 또는 dispatch_queue 가드 필요. sandbox 단독에선 미발현
+- [ ] sandbox iOS deployment target 을 15.1 → 17.0 으로 align — 본 레포 (`.iOS("17.0")`) 와 통일. sandbox `ios/SandboxApp.xcodeproj` 의 `IPHONEOS_DEPLOYMENT_TARGET` 갱신 + Podfile platform 갱신
+- [ ] RN 0.83 podspec 들이 dynamic framework (`use_frameworks! :linkage => :dynamic`) 환경에서 동작하는지 — 본 레포가 SPM dynamic 가능성. sandbox 의 fmt 패치 + Swift Explicit Modules 워크어라운드가 dynamic 모드에서도 같은 결과인지 검증 필요
 
 ---
 

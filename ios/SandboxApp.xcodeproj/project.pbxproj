@@ -15,6 +15,7 @@
 		5DA4DFAA7C0FD122E13E7092 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		7353FF4804FDE51D53CF2A72 /* DevToolViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3224BC2F2312A772DD9C28 /* DevToolViewController.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		7EB6410DAC7EE1EFAE808304 /* LifePlusApp.mm in Sources */ = {isa = PBXBuildFile; fileRef = BA079B60334D8D1179A750B9 /* LifePlusApp.mm */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		9B88DBF73B5AFC328B081F74 /* RNContainerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC5A6FE92270EB3CEA13232 /* RNContainerViewController.swift */; };
 /* End PBXBuildFile section */
@@ -34,7 +35,9 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = SandboxApp/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = SandboxApp/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		899643B72643A0AE5100CA03 /* shared.bundle.js */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = shared.bundle.js; path = SandboxApp/shared.bundle.js; sourceTree = "<group>"; };
+		BA079B60334D8D1179A750B9 /* LifePlusApp.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; name = LifePlusApp.mm; path = SandboxApp/LifePlusApp.mm; sourceTree = "<group>"; };
 		CD818ABC2BC45F86E375F0D9 /* PageBundleLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = PageBundleLoader.h; path = SandboxApp/PageBundleLoader.h; sourceTree = "<group>"; };
+		E4DA25DFD8B6D78D59A98747 /* LifePlusApp.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = LifePlusApp.h; path = SandboxApp/LifePlusApp.h; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		FD627B546ECCF364B99BC26E /* SandboxApp-Bridging-Header.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "SandboxApp-Bridging-Header.h"; path = "SandboxApp/SandboxApp-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -66,6 +69,8 @@
 				CD818ABC2BC45F86E375F0D9 /* PageBundleLoader.h */,
 				63B56AC8195234712AB3A6C6 /* PageBundleLoader.mm */,
 				FD627B546ECCF364B99BC26E /* SandboxApp-Bridging-Header.h */,
+				E4DA25DFD8B6D78D59A98747 /* LifePlusApp.h */,
+				BA079B60334D8D1179A750B9 /* LifePlusApp.mm */,
 			);
 			name = SandboxApp;
 			sourceTree = "<group>";
@@ -271,6 +276,7 @@
 				7353FF4804FDE51D53CF2A72 /* DevToolViewController.swift in Sources */,
 				9B88DBF73B5AFC328B081F74 /* RNContainerViewController.swift in Sources */,
 				1BA11DE1920CB9C028675B96 /* PageBundleLoader.mm in Sources */,
+				7EB6410DAC7EE1EFAE808304 /* LifePlusApp.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

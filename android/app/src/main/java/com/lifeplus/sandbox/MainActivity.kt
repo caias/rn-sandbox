@@ -51,7 +51,12 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         showRN(appName, path, params)
     }
 
+    // DevTool 을 backStack 없이 root 로 commit. URI 진입 케이스에서도 호출되어
+    // RN fragment 의 popBackStack 후 DevTool 이 자연스럽게 노출되게 한다.
+    // 이미 DevTool 이 container 에 떠 있으면 idempotent (replace 가 같은 클래스로 재 commit 만).
     private fun showDevTool() {
+        val existing = supportFragmentManager.findFragmentById(R.id.container)
+        if (existing is DevToolFragment) return
         supportFragmentManager.commit {
             replace(R.id.container, DevToolFragment())
         }
@@ -59,6 +64,10 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
     private fun showRN(appName: String, path: String, params: HashMap<String, String>) {
         val initialProps = buildInitialProps(path, params)
+
+        // RN fragment 의 popBackStack 시 DevTool 이 자연스럽게 노출되도록 root 보장.
+        // commit 은 idempotent — 이미 DevTool 이 root 면 no-op.
+        showDevTool()
 
         // Metro 모드는 단일 번들 → page bundle 로드 불필요. shared 만 있는 정적 모드에서만 추가 로드.
         val app = application as SandboxApplication

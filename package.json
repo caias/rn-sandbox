@@ -8,6 +8,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@lifeplus/native-bridge": "git+https://github.com/lp-mktplatform/lp-mktplatform-native-bridge.git#feature/native-bridge",
     "@react-native/new-app-screen": "0.83.2",
     "react": "19.2.1",
     "react-native": "0.83.2",

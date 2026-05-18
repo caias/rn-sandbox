@@ -7,6 +7,7 @@ import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
+import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 
 class SandboxApplication : Application(), ReactApplication {
@@ -31,9 +32,12 @@ class SandboxApplication : Application(), ReactApplication {
     //     → AppRegistry.registerComponent('{appName}', ...) 호출됨
     //     → ReactFragment 가 그 appName 으로 surface mount
     override val reactHost: ReactHost by lazy {
+        // PackageList(this).packages 는 RN autolink 가 발견한 외부 라이브러리 패키지만 포함.
+        // sandbox 내부 NativeModule (LifePlusApp) 은 여기서 수동으로 합쳐 등록.
+        val packages: List<ReactPackage> = PackageList(this).packages + LifePlusAppPackage()
         getDefaultReactHost(
             context = applicationContext,
-            packageList = PackageList(this).packages,
+            packageList = packages,
             jsMainModulePath = "index",
             jsBundleFilePath = if (useMetro) null else "assets://shared.bundle.js",
             useDevSupport = useMetro,

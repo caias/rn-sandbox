@@ -123,6 +123,6 @@ class DevToolFragment : Fragment() {
         private const val PREFS = "sandbox"
         private const val KEY_RECENT = "recentSchemes"
         const val KEY_METRO_IP = "metroIp"
-        private const val DEFAULT_SCHEME = "lifeplus-tribes://HelloRN"
+        private const val DEFAULT_SCHEME = "lifeplus-tribes://promotion"
     }
 }

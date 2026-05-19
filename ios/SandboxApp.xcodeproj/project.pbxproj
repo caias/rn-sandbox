@@ -10,6 +10,7 @@
 		0C80B921A6F3F58F76C31292 /* libPods-SandboxApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-SandboxApp.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1BA11DE1920CB9C028675B96 /* PageBundleLoader.mm in Sources */ = {isa = PBXBuildFile; fileRef = 63B56AC8195234712AB3A6C6 /* PageBundleLoader.mm */; };
+		3897B413FE1F3CCEA92ED3A2 /* main.jsbundle in Resources */ = {isa = PBXBuildFile; fileRef = D7FCDC73C4FD5D08B4EB2FDC /* main.jsbundle */; };
 		390504D782F53E753472A79D /* pages in Resources */ = {isa = PBXBuildFile; fileRef = 718BD43E3239167B12D3BE98 /* pages */; };
 		5CD84D5C138ABD5933B28513 /* shared.bundle.js in Resources */ = {isa = PBXBuildFile; fileRef = 899643B72643A0AE5100CA03 /* shared.bundle.js */; };
 		5DA4DFAA7C0FD122E13E7092 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
@@ -37,6 +38,7 @@
 		899643B72643A0AE5100CA03 /* shared.bundle.js */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = shared.bundle.js; path = SandboxApp/shared.bundle.js; sourceTree = "<group>"; };
 		BA079B60334D8D1179A750B9 /* LifePlusApp.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; name = LifePlusApp.mm; path = SandboxApp/LifePlusApp.mm; sourceTree = "<group>"; };
 		CD818ABC2BC45F86E375F0D9 /* PageBundleLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = PageBundleLoader.h; path = SandboxApp/PageBundleLoader.h; sourceTree = "<group>"; };
+		D7FCDC73C4FD5D08B4EB2FDC /* main.jsbundle */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = main.jsbundle; path = SandboxApp/main.jsbundle; sourceTree = "<group>"; };
 		E4DA25DFD8B6D78D59A98747 /* LifePlusApp.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = LifePlusApp.h; path = SandboxApp/LifePlusApp.h; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		FD627B546ECCF364B99BC26E /* SandboxApp-Bridging-Header.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "SandboxApp-Bridging-Header.h"; path = "SandboxApp/SandboxApp-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -71,6 +73,7 @@
 				FD627B546ECCF364B99BC26E /* SandboxApp-Bridging-Header.h */,
 				E4DA25DFD8B6D78D59A98747 /* LifePlusApp.h */,
 				BA079B60334D8D1179A750B9 /* LifePlusApp.mm */,
+				D7FCDC73C4FD5D08B4EB2FDC /* main.jsbundle */,
 			);
 			name = SandboxApp;
 			sourceTree = "<group>";
@@ -187,6 +190,7 @@
 				5DA4DFAA7C0FD122E13E7092 /* PrivacyInfo.xcprivacy in Resources */,
 				5CD84D5C138ABD5933B28513 /* shared.bundle.js in Resources */,
 				390504D782F53E753472A79D /* pages in Resources */,
+				3897B413FE1F3CCEA92ED3A2 /* main.jsbundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

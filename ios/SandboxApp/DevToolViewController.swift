@@ -18,8 +18,8 @@ final class DevToolViewController: UIViewController, UITextFieldDelegate {
         titleLabel.font = .preferredFont(forTextStyle: .title2)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        schemeField.placeholder = "lifeplus-tribes://HelloRN"
-        schemeField.text = "lifeplus-tribes://HelloRN"
+        schemeField.placeholder = "lifeplus-tribes://promotion"
+        schemeField.text = "lifeplus-tribes://promotion"
         schemeField.borderStyle = .roundedRect
         schemeField.autocapitalizationType = .none
         schemeField.autocorrectionType = .no

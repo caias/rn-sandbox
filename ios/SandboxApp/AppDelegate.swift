@@ -66,7 +66,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     let vc = RNContainerViewController(
       factory: reactNativeFactory,
-      appName: appName.isEmpty ? "HelloRN" : appName,
+      // URI host (= 미니앱 이름) 가 없으면 기본 진입 미니앱으로. apps/native 의 src/apps/promotion/ 가 기본.
+      appName: appName.isEmpty ? "promotion" : appName,
       initialPath: path,
       params: params
     )

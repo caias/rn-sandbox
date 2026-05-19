@@ -14,6 +14,11 @@ import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 
 class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
+    /// 이미 평가된 page bundle 의 appName. 두번째 진입부터 ReactHostImpl.loadBundle skip.
+    /// AppRegistry.registerComponent 가 idempotent 라 결과는 같지만 evaluate 비용 절약.
+    /// iOS `RNContainerViewController.loadedPages` 와 대칭.
+    private val loadedPages = mutableSetOf<String>()
+
     // JS 측 BackHandler.exitApp() 호출 시 invoke. 표준 백 버튼 동작에 위임.
     override fun invokeDefaultOnBackPressed() {
         onBackPressedDispatcher.onBackPressed()
@@ -41,7 +46,9 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             showDevTool()
             return
         }
-        val appName = uri.host.orEmpty().ifEmpty { "HelloRN" }
+        // URI host (= 미니앱 이름) 가 없으면 기본 진입 미니앱으로.
+        // apps/native 의 src/apps/promotion/ 가 기본.
+        val appName = uri.host.orEmpty().ifEmpty { "promotion" }
         val path = uri.path?.takeIf { it.isNotEmpty() } ?: "/"
         val params = HashMap<String, String>()
         uri.queryParameterNames.forEach { name ->
@@ -105,13 +112,21 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     // page bundle 의 IIFE 가 평가되면 AppRegistry.registerComponent({appName}, ...) 가 호출되어
     // 이후 ReactFragment 가 그 이름으로 surface 를 mount 할 수 있게 된다.
     //
-    // 같은 appName 을 두 번 진입하면 다시 evaluate 되지만 registerComponent 가 idempotent 라 무해.
-    // 캐싱이 가치 있으려면 별도 set 으로 추적 가능 — 현재 미니앱 2개 라 미적용.
+    // 같은 appName 을 두 번 진입하면 다시 evaluate 되지만 registerComponent 가 idempotent 라
+    // 결과는 동일. evaluate 비용만 발생하므로 loadedPages set 으로 추적해 재진입 시 skip.
+    // iOS RNContainerViewController.loadedPages 와 대칭.
     //
     // ReactHostImpl.loadBundle 은 internal API + Task 는 internal.bolts.Task 라 직접 호출이
     // Kotlin 에서 막혀있다. RN 0.83 Bridgeless 가 multi-bundle 을 위한 public API 를
     // 아직 안 노출해서 reflection 으로 우회. 표준 API 가 나오면 교체.
     private fun loadPageBundle(appName: String, onComplete: (Boolean) -> Unit) {
+        // 이미 평가된 page 면 즉시 success.
+        if (loadedPages.contains(appName)) {
+            Log.i(TAG, "page already loaded, skipping re-evaluate: $appName")
+            onComplete(true)
+            return
+        }
+
         val app = application as SandboxApplication
         val host = app.reactHost
 
@@ -163,7 +178,13 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             val task = loadBundle.invoke(host, loader)
                 ?: error("loadBundle returned null")
 
-            pollTaskCompletion(task, onComplete)
+            pollTaskCompletion(task) { ok ->
+                if (ok) {
+                    loadedPages.add(appName)
+                    Log.i(TAG, "page bundle evaluated: $appName")
+                }
+                onComplete(ok)
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "loadPageBundle reflection failed", t)
             onComplete(false)

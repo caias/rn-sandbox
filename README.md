@@ -118,7 +118,7 @@ life 모노레포의 `apps/native` 가 만드는 미니앱 번들을 CDN 에서 
 | 단계 | 사용할 ref |
 |---|---|
 | 현재 (Phase 4 완료 / 본앱 통합 전) | `feature/native-bridge` 브랜치 핀 |
-| `main` 머지 + semver 태그 (`v0.2.0` 등) 후 | 태그로 갈음 |
+| `main` 머지 후 | 기존 패턴 그대로 `main` 의 최신 커밋 기준 |
 
 본앱 PR 시 `package.json` / `Podfile.lock` / `gradle` 에 위 브랜치 또는 태그가 박혀 있는지 검증 필수.
 
@@ -159,22 +159,34 @@ sandbox 의 `LifePlusApp.{h,mm}` / `LifePlusAppModule.kt` 는 **sandbox 단독 �
 
 ## InitialProps
 
-URI 정보를 `android.os.Bundle` (Android) / `NSDictionary` (iOS) 로 빚어 RN surface 의 launch options 로 넘긴다.
+URI 정보 + 본앱 세션 정보를 `android.os.Bundle` (Android) / `NSDictionary` (iOS) 로 빚어 RN surface 의 launch options 로 넘긴다.
 
 | key | 값 | 비고 |
 |---|---|---|
 | `initialPath` | `uri.path` (없으면 `"/"`) | RN 측 Router 가 initial route 로 사용 |
 | `platform` | `"android"` / `"ios"` | |
 | `appVersion` | `BuildConfig.VERSION_NAME` / `CFBundleShortVersionString` | |
+| `accessToken` | 본앱이 보유한 로그인 세션 토큰 | 미니앱 측 API 호출 시 Authorization 헤더 구성 |
+| `userId` | 본앱 로그인 사용자 식별자 | 미니앱 측 사용자 컨텍스트 / 로깅 |
 | 그 외 query 키들 | `uri.getQueryParameter(k)` (모두 string) | URI query 평탄화. RESERVED_KEYS 충돌 시 무시 |
 
-RESERVED_KEYS = {`initialPath`, `platform`, `appVersion`}
+> ⚠️ `accessToken` / `userId` 는 **예시일 뿐 확정 스키마가 아니다.** 본앱 통합 시점에 필요한 세션 정보(예: `tenantId`, `deviceId`, `locale`, `theme`, `ageVerified` 등)를 자유롭게 추가할 수 있다. 추가 시 양쪽 native (`buildInitialProps`) 와 미니앱 측 `InitialProps` 타입 ([apps/native/src/router.tsx](https://github.com/lp-mktplatform/life/blob/main/apps/native/src/router.tsx)) 을 동시 수정해야 한다.
+
+RESERVED_KEYS = {`initialPath`, `platform`, `appVersion`, `accessToken`, `userId`} (확장 시 같이 추가)
 
 예:
 ```
 lifeplus-tribes://HelloRN/path/x?foo=hello&bar=42
   ↓
-{ initialPath: "/path/x", platform: "android", appVersion: "1.0", foo: "hello", bar: "42" }
+{
+  initialPath: "/path/x",
+  platform: "android",
+  appVersion: "1.0",
+  accessToken: "eyJhbGciOi...",
+  userId: "u-12345",
+  foo: "hello",
+  bar: "42"
+}
 ```
 
 JS 측 `useInitialProps()` 가 이걸 그대로 받음. 타입 정의는 [apps/native/src/router.tsx](https://github.com/lp-mktplatform/life/blob/main/apps/native/src/router.tsx) 의 `InitialProps`.

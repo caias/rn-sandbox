@@ -41,6 +41,20 @@ final class RNContainerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // RN 미니앱은 자체 Header (apps/native/src/components/Header) 를 그리므로
+        // sandbox 의 UINavigationController nav bar 와 시각적으로 중복된다.
+        // RN 화면에서는 native nav bar 숨김. DevTool / 다른 native 화면으로 돌아갈 때는
+        // viewWillDisappear 에서 다시 노출 (UINavigationController 의 push/pop 흐름 보존).
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground

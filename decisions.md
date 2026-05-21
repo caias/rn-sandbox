@@ -94,10 +94,6 @@
 
 ---
 
-## 회고는 Obsidian 으로
+## 본 파일의 범위
 
-sandbox-poc 의 모든 결정 회고 (2026-05-11 MVP, 2026-05-13 multi-bundle, 2026-05-14 부채정리 / iOS 라인 정상화 / Ruby+Xcode, 2026-05-15 iOS verify 재개) 는 **Obsidian `1-Projects/Epic-RN-metro/01-history/sandbox-retros.md`** 로 이전됨. 결정 카드(D-1 ~ D-33) 와 "추후 재확인 필요" 체크리스트만 본 파일에 유지.
-
-본앱 개발자가 sandbox-poc 를 받았을 때 *결정 결과*는 위 표가 단일 출처. *결정 과정 / 막힌 지점 / 학습* 은 Obsidian 참조.
-
-추가로 RN 미니앱 도입 컨텍스트 전체는 Obsidian `Epic-RN-metro/_INDEX.md`, 본앱 통합 명세는 `Epic-RN-metro/03-host-integration/host-integration-spec.md` 가 단일 출처.
+본 파일에는 **결정 카드 (D-1 ~ D-33)** 와 **"추후 재확인 필요" 체크리스트**만 유지한다. 본앱 개발자가 sandbox-poc 를 받았을 때 *결정 결과*는 위 표가 단일 출처. 결정 과정 / 막힌 지점 / 학습 등 회고 본문은 본 레포 외부 (개인 노트) 로 이전됨.

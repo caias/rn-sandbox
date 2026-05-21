@@ -506,6 +506,74 @@ Xcode 26.5 + iOS 26.5 SDK 로 빌드된 `.app` (deployment target 15.1) 이 iOS 
 
 `class_getInstanceVariable([host class], "_instance")` 는 `RCTHostImpl` 의 private ivar 명에 의존한다. RN 업그레이드 시 ivar 명이 바뀌면 `nil` 을 반환하고 `[PageBundleLoader] ❌ RCTHost has no _instance ivar` 로그가 나온다. RN 0.84+ 에서 public API 가 노출되면 reflection 을 제거한다 (D-24, 추후 확인 필요 항목).
 
+### RN 미니앱 화면에서 native NavigationBar 숨김 (2026-05-21)
+
+sandbox 의 `AppDelegate` 가 모든 화면을 `UINavigationController` 위에 push 하는 구조라, `RNContainerViewController` 가 push 되면 iOS 시스템 NavigationBar (제목 + back chevron) 가 자동 표시된다. apps/native 측 미니앱 (현재 card-test) 이 자체 `Header` 컴포넌트로 동일한 영역을 그리므로 시각적으로 중복이 발생.
+
+**조치**: `RNContainerViewController.viewWillAppear` 에서 `navigationController?.setNavigationBarHidden(true, animated:)` 호출, `viewWillDisappear` 에서 다시 `false` 로 복원. RN 화면에 한정해 nav bar 를 끄고, DevTool 등 다른 native 화면으로 돌아갈 때는 정상 노출.
+
+향후 RN 미니앱이 자체 Header 를 안 그리는 케이스 (예: full-bleed 콘텐츠) 가 생기면 `RNContainerViewController` 가 prop / URL query 로 그 분기를 받아 nav bar 노출 여부를 토글하도록 확장. 현재는 모든 RN 화면이 자체 Header 를 그리는 정책이라 무조건 숨김.
+
+---
+
+## 부록: 새 RN 라이브러리 추가 후 재빌드 (2026-05-21 추가)
+
+RN 진영의 native 의존성을 가진 라이브러리 (예: `react-native-svg`, `react-native-safe-area-context`) 를 미니앱에서 쓰려면 sandbox iOS app 에 그 native module / ViewManager 가 link 되어 있어야 한다. **CocoaPods autolinking (`use_native_modules!`) 이 거의 다 처리하므로 Swift / pbxproj 는 거의 안 만진다.**
+
+### 절차 (iOS)
+
+```bash
+# 1. life 모노레포 apps/native 와 sandbox 양쪽 package.json 에 같은 버전 dep 추가 (lockstep)
+#    (apps/native 측 작업은 RN 개발자가 담당)
+
+# 2. sandbox node_modules 동기화
+cd ~/Desktop/sandbox
+npm install                                    # 또는 yarn install
+
+# 3. Pod install — Podfile 의 use_native_modules! 가 새 라이브러리 podspec 을 자동 발견
+cd ios
+bundle exec pod install                        # rbenv ruby 3.2.11 + bundler 4.0.11 활성 상태에서
+
+# 4. Xcode 빌드 + 시뮬레이터 install
+xcodebuild -workspace SandboxApp.xcworkspace -scheme SandboxApp \
+  -configuration Debug -sdk iphonesimulator \
+  -destination "id=<SIM_UUID>" build
+xcrun simctl install booted "<DerivedData>/SandboxApp.app"
+
+# 5. RN 개발자가 yarn deploy:ios 로 새 shared/page bundle 을 ios/SandboxApp/ 에 배치한 뒤,
+#    Xcode 를 한 번 더 빌드/install 해야 .app 안에 새 bundle 이 들어간다
+```
+
+### Swift / pbxproj 변경이 필요한 케이스 (드묾)
+
+- 라이브러리가 autolinking 대상이 아닌 옛 RN 스타일이거나, native module 을 `RCTBridgeModule` 로 직접 등록해야 하는 경우. 현재 sandbox 의 모든 deps 는 autolinking 또는 sandbox 자체 코드 (`LifePlusApp.h/.mm` 같은 NavBridge native module — `ios/add_swift_sources.rb` 로 멱등 등록) 로 처리되어 있다. 새 라이브러리 추가 시 Pod install 만으로 link 가 안 되면 그 podspec 의 README 를 확인.
+
+### 검증
+
+```bash
+# Podfile.lock 에 새 pod 이 등록됐는지
+grep "<lib-name>" ios/Podfile.lock
+
+# 시뮬레이터 실행 시 RN 측 로그
+xcrun simctl spawn booted log stream --predicate \
+  'processImagePath contains "SandboxApp"' --style compact
+```
+
+- `[PageBundleLoader] loaded local bundle: ...` 로그까지 정상이면 page bundle 평가 성공
+- `Class <RNView> was not exported` 류 에러 → autolinking 실패. `rm -rf ios/Pods ios/build && bundle exec pod install` 후 재시도
+
+### 함정
+
+- **`Ld __preview.dylib` Xcode 26 Linker 워닝**: SwiftUI Preview 용 dylib 빌드 실패 메시지. 실제 앱 빌드와 무관하니 무시 가능
+- **mono `main.jsbundle` 잔재**: pbxproj 에 `main.jsbundle` resource 참조가 남아있으면 `CpResource ... No such file or directory` 로 build 실패. `bundle exec ruby remove_mono_jsbundle_ref.rb` 로 멱등 제거
+- **Ruby 환경**: 시스템 `ruby 2.6.10` 으로 `bundle exec` 하면 `Could not find 'bundler' (4.0.11)` 에러. `eval "$(rbenv init - zsh)"` 또는 `~/.zshrc` 영구 등록 필요
+
+### 사례
+
+| 날짜 | 추가 라이브러리 | sandbox 측 변경 |
+|---|---|---|
+| 2026-05-21 | `react-native-svg 15.15.5` | `package.json` dep 한 줄, `pod install`, Xcode 빌드. Swift / pbxproj target 변경 0 (단, mono 잔재 정리로 `remove_mono_jsbundle_ref.rb` 한 번 실행) |
+
 ---
 
 ## 다음 단계 (Phase 2-2 이후)

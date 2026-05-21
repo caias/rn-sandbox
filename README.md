@@ -1,8 +1,7 @@
 # sandbox-poc — RN Multi-Bundle Native Host Shell
 
 > **본 README 는 본앱 개발자(lp-mktplatform-ios / lp-mktplatform-android) 입장 입문 가이드.**
-> 결정 과정 / 회고 / 히스토리는 Obsidian `Epic-RN-metro/01-history/` 참조.
-> 본앱 통합 시작 입력 명세는 Obsidian `Epic-RN-metro/03-host-integration/host-integration-spec.md`.
+> 결정 카드는 [decisions.md](decisions.md), 빌드 디테일은 [aos.md](aos.md) / [ios.md](ios.md) 참조.
 
 life 모노레포의 `apps/native` 가 만드는 미니앱 번들을 CDN 에서 동적으로 fetch 해 띄우는 Native Host Shell **참조 구현**.
 본 앱 (lp-mktplatform-ios / lp-mktplatform-android) 이 같은 패턴으로 구현해야 미니앱이 동작한다.
@@ -262,8 +261,6 @@ sandbox-poc/
 | `TurboModule method "X" called with 1 arguments (expected argument count: 0)` | `sdk-native.ts` 가 void 커맨드도 항상 1-arg invoke. native 시그니처가 0-arg 면 FATAL | Android: `@ReactMethod fun X(params: ReadableMap?, promise: Promise)`. iOS: `RCT_REMAP_METHOD(X, XWithParams:(NSDictionary*)params resolver:... rejecter:...)`. (D-30) |
 | (iOS) CocoaPods install 중 `FMT_USE_CONSTEVAL` 컴파일 에러 | Xcode 26 + fmt 11.0.2 strict consteval 충돌 (D-28) | `Podfile` 의 `post_install` 패치 적용 확인 후 `pod install` 재실행 |
 
-카테고리별 상세 트러블슈팅: Obsidian `Epic-RN-metro/02-current-state/troubleshooting.md`
-
 ---
 
 ## 의도적으로 안 한 것
@@ -282,4 +279,3 @@ sandbox-poc/
 - Android: [aos.md](aos.md)
 - iOS: [ios.md](ios.md)
 - 결정 카드 (D-1 ~ D-33): [decisions.md](decisions.md)
-- 본앱 통합 시작 입력: Obsidian `Epic-RN-metro/03-host-integration/host-integration-spec.md`

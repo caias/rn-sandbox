@@ -505,6 +505,52 @@ android/app/src/main/assets/
 
 ---
 
+## 부록: 새 RN 라이브러리 추가 후 재빌드 (2026-05-21 추가)
+
+RN 진영의 native 의존성을 가진 라이브러리 (예: `react-native-svg`, `react-native-safe-area-context`, `react-native-gesture-handler`) 를 미니앱에서 쓰려면 sandbox APK 에 그 native ViewManager / module 이 link 되어 있어야 한다. **autolinking 이 거의 다 처리하므로 native 코드는 거의 안 만진다.**
+
+### 절차 (Android)
+
+```bash
+# 1. life 모노레포 apps/native 와 sandbox 양쪽 package.json 에 같은 버전 dep 추가 (lockstep)
+#    (apps/native 측 작업은 RN 개발자가 담당)
+
+# 2. sandbox node_modules 동기화
+cd ~/Desktop/sandbox
+npm install                                    # 또는 yarn install
+
+# 3. APK 재빌드 — autolinking 이 settings.gradle 의 autolinkLibrariesFromCommand()
+#    + app/build.gradle 의 autolinkLibrariesWithApp() 로 새 의존성을 자동 link
+cd android && ./gradlew :app:assembleDebug
+
+# 4. 디바이스/emulator 재설치 (SharedPreferences 는 보존 — metroIp 등 유지됨)
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 5. RN 개발자가 yarn deploy:android 로 새 shared/page bundle 을 assets/ 에 배치한 뒤,
+#    APK 를 한 번 더 빌드/설치해야 device 가 새 bundle 을 본다 (assets 는 APK 패키징 대상)
+```
+
+### Kotlin 코드 변경이 필요한 케이스 (드묾)
+
+- 라이브러리가 autolinking 대상이 아닌 옛 RN 0.59 이전 스타일이거나, native module 등록을 `MainApplication` 에 `getPackages()` 로 명시해야 하는 경우. 현재 우리 sandbox 의 모든 deps (RNSVG, safe-area-context, NavBridge `LifePlusAppPackage`) 는 autolinking 또는 sandbox 자체 코드로 처리되어 있으니, 새 라이브러리 추가 시 build error 가 안 나면 손댈 게 없다.
+
+### 검증
+
+```bash
+adb logcat | grep -E "sandbox-poc|ReactNativeJS|ViewManager"
+```
+
+- `Could not find generated setter for class com.horcrux.svg.RenderableViewManager$*` 류 워닝은 Fabric New Architecture + codegen 안 돌린 라이브러리의 알려진 무해 워닝 — 런타임 동작에는 영향 없음
+- `Unable to load class ...` 또는 `Native module ... not registered` 가 뜨면 autolinking 누락 — `./gradlew clean && ./gradlew :app:assembleDebug` 후 재시도
+
+### 사례
+
+| 날짜 | 추가 라이브러리 | sandbox 측 변경 |
+|---|---|---|
+| 2026-05-21 | `react-native-svg 15.15.5` | `package.json` dep 한 줄, `npm install`, APK 재빌드. Kotlin / pbxproj / Manifest 변경 0 |
+
+---
+
 ## 관련 문서
 
 - [README.md](README.md) — 프로젝트 공통 정체성 + 아키텍처 + 진행 상태

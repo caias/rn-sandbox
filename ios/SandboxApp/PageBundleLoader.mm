@@ -73,8 +73,69 @@ static RCTInstance *gRctInstance = nil;
       }
       return;
     }
-    [self evaluatePageBundleAtURL:sourceURL instance:instance completion:completion];
+    // file:// 은 동기 read, http(s):// 는 URLSession 비동기 fetch.
+    // 둘 다 NSData 로 정규화한 뒤 동일 evaluate 경로로 합류.
+    [self fetchBundleAtURL:sourceURL completion:^(NSData *_Nullable data, NSError *_Nullable fetchError) {
+      if (data == nil) {
+        if (completion) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            completion(fetchError ?: [NSError errorWithDomain:@"PageBundleLoader"
+                                                         code:-2
+                                                     userInfo:@{NSLocalizedDescriptionKey: @"failed to fetch bundle"}]);
+          });
+        }
+        return;
+      }
+      [self evaluateBundleData:data sourceURL:sourceURL instance:instance completion:completion];
+    }];
   }];
+}
+
++ (void)fetchBundleAtURL:(NSURL *)sourceURL
+              completion:(void (^)(NSData *_Nullable data, NSError *_Nullable error))completion
+{
+  NSString *scheme = sourceURL.scheme.lowercaseString;
+  if ([scheme isEqualToString:@"file"] || scheme.length == 0) {
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfURL:sourceURL options:0 error:&readError];
+    NSLog(@"[PageBundleLoader] loaded local bundle: %@ (%lu bytes)", sourceURL.absoluteString, (unsigned long)data.length);
+    completion(data, readError);
+    return;
+  }
+
+  // http(s) — URLSession 비동기 fetch. 검증 단계라 캐시/sha256/재시도 없음.
+  NSLog(@"[PageBundleLoader] fetching from CDN: %@", sourceURL.absoluteString);
+  // shared 세션을 쓰면 ARC 가 fetch 중인 NSURLSession 을 해제할 일이 없어 안전.
+  // ephemeralSessionConfiguration 로 cache 무시 + 매 진입 fresh fetch.
+  static NSURLSession *sCDNSession = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    config.timeoutIntervalForRequest = 10.0;
+    config.requestCachePolicy = NSURLRequestReloadIgnoringLocalAndRemoteCacheData;
+    sCDNSession = [NSURLSession sessionWithConfiguration:config];
+  });
+  NSURLSessionDataTask *task = [sCDNSession dataTaskWithURL:sourceURL
+                                          completionHandler:^(NSData *_Nullable data, NSURLResponse *_Nullable response, NSError *_Nullable error) {
+    if (error != nil) {
+      NSLog(@"[PageBundleLoader] ❌ CDN fetch failed: %@", error.localizedDescription);
+      completion(nil, error);
+      return;
+    }
+    if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+      NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
+      if (status < 200 || status >= 300) {
+        NSLog(@"[PageBundleLoader] ❌ CDN fetch non-2xx: %ld %@", (long)status, sourceURL.absoluteString);
+        completion(nil, [NSError errorWithDomain:@"PageBundleLoader.HTTP"
+                                            code:status
+                                        userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"HTTP %ld for %@", (long)status, sourceURL.absoluteString]}]);
+        return;
+      }
+    }
+    NSLog(@"[PageBundleLoader] ✅ fetched from CDN: %@ (%lu bytes)", sourceURL.absoluteString, (unsigned long)data.length);
+    completion(data, nil);
+  }];
+  [task resume];
 }
 
 + (void)waitForRCTInstanceWithTimeout:(NSTimeInterval)timeout
@@ -96,25 +157,12 @@ static RCTInstance *gRctInstance = nil;
   });
 }
 
-+ (void)evaluatePageBundleAtURL:(NSURL *)sourceURL
-                       instance:(RCTInstance *)instance
-                     completion:(void (^)(NSError *_Nullable))completion
++ (void)evaluateBundleData:(NSData *)data
+                 sourceURL:(NSURL *)sourceURL
+                  instance:(RCTInstance *)instance
+                completion:(void (^)(NSError *_Nullable))completion
 {
-
-  // 1) 로컬 파일 → NSData → std::string.
-  NSError *readError = nil;
-  NSData *data = [NSData dataWithContentsOfURL:sourceURL options:0 error:&readError];
-  if (data == nil) {
-    if (completion) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        completion(readError ?: [NSError errorWithDomain:@"PageBundleLoader"
-                                                    code:-2
-                                                userInfo:@{NSLocalizedDescriptionKey: @"failed to read bundle"}]);
-      });
-    }
-    return;
-  }
-
+  // fetchBundleAtURL: 가 file:// / http(s):// 둘 다 정규화한 결과를 받음.
   std::string source(static_cast<const char *>(data.bytes), data.length);
   std::string sourceUrl = [[sourceURL absoluteString] UTF8String];
 

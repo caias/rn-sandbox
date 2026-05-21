@@ -1,6 +1,7 @@
 package com.lifeplus.sandbox
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +12,10 @@ import com.facebook.react.ReactInstanceEventListener
 import com.facebook.react.bridge.JSBundleLoader
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
@@ -155,14 +160,91 @@ class MainActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         appName: String,
         onComplete: (Boolean) -> Unit,
     ) {
+        // CDN URL 우선 시도 → 실패 시 assets fallback.
+        // CDN fetch 는 background thread, evaluate 는 main thread.
+        val cdnUrl = buildCdnPageBundleUrl(appName)
+        if (cdnUrl != null) {
+            Log.i(TAG, "fetching from CDN: $cdnUrl")
+            thread(start = true, name = "page-bundle-fetch-$appName") {
+                val cachedFile = downloadToCache(cdnUrl, "page-$appName.bundle.js")
+                runOnUiThread {
+                    if (cachedFile != null) {
+                        Log.i(TAG, "✅ fetched from CDN: $cdnUrl (${cachedFile.length()} bytes)")
+                        val loader = JSBundleLoader.createFileLoader(cachedFile.absolutePath)
+                        invokeLoadBundleWithLoader(host, appName, loader, onComplete)
+                    } else {
+                        Log.w(TAG, "❌ CDN fetch failed, falling back to assets: $appName")
+                        invokeLoadBundleWithLoader(host, appName, buildAssetLoader(appName), onComplete)
+                    }
+                }
+            }
+            return
+        }
+        Log.i(TAG, "no CDN base URL, using assets loader: $appName")
+        invokeLoadBundleWithLoader(host, appName, buildAssetLoader(appName), onComplete)
+    }
+
+    private fun buildAssetLoader(appName: String): JSBundleLoader {
         val assetUrl = "assets://pages/$appName.bundle.js"
         Log.i(TAG, "loading page bundle: $assetUrl")
-        val loader: JSBundleLoader = JSBundleLoader.createAssetLoader(
+        return JSBundleLoader.createAssetLoader(
             applicationContext,
             assetUrl,
             /* loadSynchronously = */ false,
         )
+    }
 
+    // AndroidManifest 의 LifePlusCDNBaseURL meta-data + /android/pages/{appName}.bundle.js.
+    // base 는 도메인만 ("https://cdn.example.com"), platform path 는 native 가 박는다.
+    // life 모노레포 `yarn deploy:cdn:android` 가 android/pages/ prefix 로 업로드.
+    private fun buildCdnPageBundleUrl(appName: String): String? {
+        val base = try {
+            val ai = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+            ai.metaData?.getString("LifePlusCDNBaseURL")
+        } catch (t: Throwable) {
+            Log.w(TAG, "failed to read LifePlusCDNBaseURL meta-data", t)
+            null
+        } ?: return null
+        if (base.isBlank()) return null
+        val trimmed = base.trimEnd('/')
+        return "$trimmed/android/pages/$appName.bundle.js"
+    }
+
+    // 짧은 5KB 단위 다운로드. 검증 단계라 sha256/ETag/재시도 없음.
+    // 성공 시 cacheDir 안의 임시 파일 반환, 실패 시 null.
+    private fun downloadToCache(urlString: String, cacheFileName: String): File? {
+        val cacheFile = File(cacheDir, cacheFileName)
+        return try {
+            val url = URL(urlString)
+            (url.openConnection() as HttpURLConnection).run {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+                try {
+                    if (responseCode !in 200..299) {
+                        Log.w(TAG, "CDN fetch non-2xx: $responseCode $urlString")
+                        return null
+                    }
+                    inputStream.use { input ->
+                        cacheFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    cacheFile
+                } finally {
+                    disconnect()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "CDN fetch failed: $urlString", t)
+            null
+        }
+    }
+
+    private fun invokeLoadBundleWithLoader(
+        host: com.facebook.react.ReactHost,
+        appName: String,
+        loader: JSBundleLoader,
+        onComplete: (Boolean) -> Unit,
+    ) {
         try {
             // ReactHostImpl.loadBundle(loader): Task<Boolean>
             //

@@ -12,6 +12,16 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!--
+            CDN base URL for miniapp page bundles.
+            MainActivity.loadPageBundle 가 이걸 읽어서 https://{base}/android/pages/{appName}.bundle.js 를
+            OkHttp 로 fetch → cacheDir 에 임시 저장 → JSBundleLoader.createFileLoader 로 평가.
+            life monorepo 의 `yarn deploy:cdn:android` 가 동일 prefix(android/pages/)로 업로드.
+        -->
+        <meta-data
+            android:name="LifePlusCDNBaseURL"
+            android:value="https://d23eo46tuoxssl.cloudfront.net" />
+
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
